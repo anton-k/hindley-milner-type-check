@@ -1,0 +1,91 @@
+name:                   hindley-milner-type-check
+version:                0.1.0.0
+synopsis:               Type inference for Hindley-Milner based languages
+description:
+    This package contains an implemention of Hindley-Milner inference algorithm.
+    It supports reporting of source code locations for errors.
+    Language for type inference is labda-calculus augmented with primitive
+    functions, let-expressions,  case-expressions and bottom.
+
+
+license:                MIT
+license-file:           LICENSE
+author:                 Anton Kholomiov, Aleksey Khudyakov
+maintainer:             anton.kholomiov@gmail.com
+category:               Language
+build-type:             Simple
+cabal-version:          >=1.22
+
+source-repository head
+  type:                 git
+  location:             https://github.com/hex/hindleymilner-type-check
+
+library
+  ghc-options:  -Wall
+  exposed-modules:
+    Type.Check.HM,
+    Type.Check.HM.Infer,
+    Type.Check.HM.Lang
+    Type.Check.HM.Pretty,
+    Type.Check.HM.Subst,
+    Type.Check.HM.Term,
+    Type.Check.HM.Type,
+    Type.Check.HM.TypeError,
+    Type.Check.HM.TyTerm
+
+  other-modules:
+
+  -- Other library packages from which modules are imported.
+  build-depends: base                      >=4.8 && <5
+               , deepseq                   >=1.4
+               , containers                >=0.5
+               , deriving-compat
+               , data-fix                  >=0.3
+               , dlist
+               , mtl
+               , prettyprinter
+               , text
+
+  -- Directories containing source files.
+  hs-source-dirs:       src
+
+  -- Base language which the package is written in.
+  default-language:     Haskell2010
+
+  default-extensions:
+    DeriveDataTypeable
+    DeriveFunctor,
+    DeriveFoldable,
+    DeriveTraversable,
+    DeriveGeneric,
+    FlexibleContexts,
+    FlexibleInstances,
+    GeneralizedNewtypeDeriving,
+    LambdaCase,
+    MultiParamTypeClasses,
+    OverloadedStrings,
+    RankNTypes
+    RecordWildCards,
+    ScopedTypeVariables,
+    StandaloneDeriving,
+    TemplateHaskell,
+    TupleSections,
+    TypeFamilies,
+    TypeSynonymInstances
+
+test-suite hindley-milner-tests
+  Type:                exitcode-stdio-1.0
+  Ghc-options:         -Wall -threaded -rtsopts
+  Default-Language:    Haskell2010
+  Build-Depends:       base              >=4.9 && <5
+                     , hindley-milner-type-check
+                     , containers
+                     , text
+                     , data-fix                  >=0.3
+                     , tasty
+                     , tasty-hunit
+                     , prettyprinter
+  hs-source-dirs:      test
+  Main-is:             Main.hs
+  Other-modules:       TM.SKI
+                     , TM.NumLang
