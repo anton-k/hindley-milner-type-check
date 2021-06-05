@@ -7,6 +7,8 @@ description:
     Language for type inference is labda-calculus augmented with primitive
     functions, let-expressions,  case-expressions and bottom.
 
+    See github repo for tutorial and test-cases for examples.
+
 
 license:                MIT
 license-file:           LICENSE
@@ -18,7 +20,7 @@ cabal-version:          >=1.22
 
 source-repository head
   type:                 git
-  location:             https://github.com/hex/hindleymilner-type-check
+  location:             https://github.com/anton-k/hindley-milner-type-check
 
 library
   ghc-options:  -Wall

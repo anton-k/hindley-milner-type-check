@@ -219,7 +219,7 @@ They are primitive operations of our language.
 
 Let's define boolean expressions:
 
-```
+```haskell
 -- | Boolean &&
 andB :: Expr -> Expr -> Expr
 andB = app2 "&&"
@@ -249,7 +249,7 @@ gte = app2 ">="
 
 Also we can define operator for `if-then-else` branching:
 
-```
+```haskell
 -- | If-expressions
 if_ :: Expr -> Expr -> Expr -> Expr
 if_ = app3 "if"
@@ -258,7 +258,7 @@ if_ = app3 "if"
 We can create simple expressions with integers and numbers. But what about functions?
 Are we going to support them? That's exactly what lambda-abstraction does:
 
-```
+```haskell
 -- | Lambda-expressions
 lam :: Var -> Expr -> Expr
 lam v (Expr fun) = Expr $ T.lamE defLoc v fun
@@ -293,7 +293,7 @@ for every case. But in the type-checker we distinguish recursive and non-recursi
 The non-recursive `let_` can only define variable. We can not use it in the right-hand side of
 the definition. So the expression:
 
-```
+```haskell
 let fac x = if (x <= 0) then 1 else (x * fac (x - 1))
 in  fac 10
 ```
@@ -341,7 +341,7 @@ like Haskell does with parens and brackets.
 
 Type signatures contain information on weather type is polymorphic or monomorphic:
 
-```
+```haskell
 -- | Functor for signature is a special type that we need for type inference algorithm.
 -- We specify which variables in the type are schematic (non-free).
 data SignatureF loc var r
@@ -417,7 +417,7 @@ comparisons = fmap ( `is` (intT ~> intT ~> boolT)) ["==", "/=", "<", ">", "<=", 
 
 In the signature for `if-then-else` we encounter type-parameter:
 
-```
+```haskell
 ifSig = (if", forA $ T.monoT $ boolT ~> aT ~> aT ~> aT)
   where
     -- forall a . ...
