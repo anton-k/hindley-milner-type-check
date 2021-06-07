@@ -55,6 +55,7 @@ library
   default-language:     Haskell2010
 
   default-extensions:
+    ConstraintKinds
     DeriveDataTypeable
     DeriveFunctor,
     DeriveFoldable,
@@ -73,6 +74,7 @@ library
     TemplateHaskell,
     TupleSections,
     TypeFamilies,
+    TypeApplications
     TypeSynonymInstances
 
 test-suite hindley-milner-type-check-tests

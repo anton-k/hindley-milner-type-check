@@ -1,10 +1,12 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 -- | Pretty printer for types and terms.
 module Type.Check.HM.Pretty(
-    HasPrefix(..)
+    PrettyVar
+  , FixityCtx(..)
   , PrintCons(..)
   , OpFix(..)
   , Fixity(..)
+  , Pretty(..)
 ) where
 
 import Data.Bool
@@ -15,100 +17,115 @@ import Data.Text.Prettyprint.Doc
 
 import Type.Check.HM.Type
 import Type.Check.HM.Term
+import Type.Check.HM.TypeError
 
--- | Class to querry fixity of infix operations.
-class IsVar v => HasPrefix v where
-  getFixity :: v -> Maybe OpFix
+-- | Type to querry fixity of infix operations in type variables.
+data FixityCtx var a = FixityCtx
+  { fixity'context :: var -> Maybe OpFix
+  , fixity'data    :: a
+  }
 
-instance HasPrefix Text where
-  getFixity = const Nothing
-
-instance HasPrefix String where
-  getFixity = const Nothing
-
-instance HasPrefix Int where
-  getFixity = const Nothing
+-- | Ignores fixity information
+noFixity :: forall v a . a -> FixityCtx v a
+noFixity = FixityCtx (const Nothing)
 
 -- | This class is useful to define the way to print special cases
 -- like constructors for tuples or lists.
 class PrintCons v where
   printCons :: v -> [Doc ann] -> Doc ann
 
+instance PrintCons Int where
+  printCons name args = hsep $ pretty name : args
+
+instance PrintCons String where
+  printCons name args = hsep $ pretty name : args
+
 instance PrintCons Text where
   printCons name args = hsep $ pretty name : args
 
-isPrefix :: HasPrefix v => v -> Bool
-isPrefix = isNothing . getFixity
+isPrefix :: (v -> Maybe OpFix) -> v -> Bool
+isPrefix getFixity = isNothing . getFixity
 
-isInfix :: HasPrefix v => v -> Bool
-isInfix  = not . isPrefix
+isInfix :: (v -> Maybe OpFix) -> v -> Bool
+isInfix a = not . isPrefix a
 
-instance (Pretty v, PrintCons v, HasPrefix v) => Pretty (Signature loc v) where
-  pretty = foldFix go . unSignature
+type PrettyVar a = (Pretty a, PrintCons a, IsVar a)
+
+instance (PrettyVar v) => Pretty (Signature loc v) where
+  pretty = pretty . noFixity @v
+
+instance (PrettyVar v) => Pretty (FixityCtx v (Signature loc v)) where
+  pretty (FixityCtx getFixity sign) = foldFix go $ unSignature sign
     where
       go = \case
         ForAllT _ _ r -> r
-        MonoT ty      -> pretty ty
+        MonoT ty      -> pretty (FixityCtx getFixity ty)
 
-instance (HasPrefix v, PrintCons v, Pretty v) => Pretty (Type loc v) where
-  pretty = go False initCtx . unType
+instance (PrettyVar v) => Pretty (Type loc v) where
+  pretty = pretty . noFixity @v
+
+instance (PrettyVar v) => Pretty (FixityCtx v (Type loc v)) where
+  pretty (FixityCtx getFixity ty) = go False initCtx $ unType ty
     where
       go :: Bool -> FixityContext v -> Fix (TypeF loc v) -> Doc ann
       go isArrPrev ctx (Fix expr) = case expr of
         VarT _ name   -> pretty name
-        ConT _ name [a, b] | isInfix name -> fromBin name a b
+        ConT _ name [a, b] | isInfix getFixity name -> fromBin name a b
         ConT _ name as -> fromCon isArrPrev name as
         ArrowT _ a b -> fromArrow a b
         TupleT _ as -> fromTuple as
         ListT _ a -> fromList a
         where
-          fromCon isArr name args = maybeParens (not (null args) && not isArr && needsParens ctx OpFunAp) $
+          fromCon isArr name args = maybeParens (not (null args) && not isArr && needsParens getFixity ctx OpFunAp) $
             printCons name $ fmap (go False (FcRight OpFunAp)) args
 
-          fromBin op a b = maybeParens (needsParens ctx (Op op)) $ hsep
+          fromBin op a b = maybeParens (needsParens getFixity ctx (Op op)) $ hsep
             [ go True (FcLeft $ Op op) a
             , pretty op
             , go True (FcRight $ Op op) b
             ]
 
-          fromArrow a b = maybeParens (needsParens ctx ArrowOp) $ hsep
+          fromArrow a b = maybeParens (needsParens getFixity ctx ArrowOp) $ hsep
             [ go True (FcLeft ArrowOp ) a
             , "->"
             , go True (FcRight ArrowOp) b
             ]
 
-          fromTuple as = parens $ hsep $ punctuate comma $ fmap (pretty . Type) as
+          fromTuple as = parens $ hsep $ punctuate comma $ fmap (pretty . FixityCtx getFixity . Type) as
 
-          fromList a = brackets $ pretty $ Type a
+          fromList a = brackets $ pretty $ FixityCtx getFixity $ Type a
 
       initCtx = FcNone
 
 maybeParens :: Bool -> Doc ann -> Doc ann
 maybeParens cond = bool id parens cond
 
-needsParens :: HasPrefix v => FixityContext v -> Operator v -> Bool
-needsParens = \case
+needsParens :: (v -> Maybe OpFix) -> FixityContext v -> Operator v -> Bool
+needsParens getFixity = \case
   FcNone      -> const False
   FcLeft ctx  -> fcLeft ctx
   FcRight ctx -> fcRight ctx
   where
     fcLeft ctxt op
-      | comparePrec ctxt op == PoLT = False
-      | comparePrec ctxt op == PoGT = True
-      | comparePrec ctxt op == PoNC = True
+      | comparePrec' ctxt op == PoLT = False
+      | comparePrec' ctxt op == PoGT = True
+      | comparePrec' ctxt op == PoNC = True
       -- otherwise the two operators have the same precedence
-      | fixity ctxt /= fixity op = True
-      | fixity ctxt == FixLeft = False
+      | fixity' ctxt /= fixity' op = True
+      | fixity' ctxt == FixLeft = False
       | otherwise = True
 
     fcRight ctxt op
-      | comparePrec ctxt op == PoLT = False
-      | comparePrec ctxt op == PoGT = True
-      | comparePrec ctxt op == PoNC = True
+      | comparePrec' ctxt op == PoLT = False
+      | comparePrec' ctxt op == PoGT = True
+      | comparePrec' ctxt op == PoNC = True
       -- otherwise the two operators have the same precedence
-      | fixity ctxt /= fixity op = True
-      | fixity ctxt == FixRight = False
+      | fixity' ctxt /= fixity' op = True
+      | fixity' ctxt == FixRight = False
       | otherwise = True
+
+    comparePrec' = comparePrec getFixity
+    fixity' = fixity getFixity
 
 data PartialOrdering = PoLT | PoGT | PoEQ | PoNC
   deriving Eq
@@ -136,14 +153,14 @@ initEnv = Map.fromList
   [ (Op "->", OpFix FixRight 2) ]
 -}
 
-getFixityEnv :: HasPrefix v => Operator v -> Maybe OpFix
-getFixityEnv = \case
+getFixityEnv :: (v -> Maybe OpFix) -> Operator v -> Maybe OpFix
+getFixityEnv getFixity = \case
   OpFunAp -> Nothing
   Op v    -> getFixity v
   ArrowOp -> Just $ OpFix FixRight 2
 
-comparePrec :: HasPrefix v => Operator v -> Operator v -> PartialOrdering
-comparePrec a b = case (getFixityEnv a, getFixityEnv b) of
+comparePrec :: (v -> Maybe OpFix) -> Operator v -> Operator v -> PartialOrdering
+comparePrec getFixity a b = case (getFixityEnv getFixity a, getFixityEnv getFixity b) of
   (Just opA, Just opB) -> toPo (opFix'prec opA) (opFix'prec opB)
   _                    -> PoNC
   where
@@ -153,13 +170,17 @@ comparePrec a b = case (getFixityEnv a, getFixityEnv b) of
       | otherwise = PoEQ
 
 
-fixity :: HasPrefix v => Operator v -> Fixity
-fixity op = maybe FixNone opFix'fixity $ getFixityEnv op
+fixity :: (v -> Maybe OpFix) -> Operator v -> Fixity
+fixity getFixity op = maybe FixNone opFix'fixity $ getFixityEnv getFixity op
 
----------------------------------------
+-----------------------------------------------------------------
+-- pretty terms
 
-instance (HasPrefix v, PrintCons v, Pretty v, Pretty prim) => Pretty (Term prim loc v) where
-  pretty (Term x) = foldFix prettyTermF x
+instance (PrettyVar v, Pretty prim) => Pretty (Term prim loc v) where
+  pretty = pretty . noFixity @v
+
+instance (PrettyVar v, Pretty prim) => Pretty (FixityCtx v (Term prim loc v)) where
+  pretty (FixityCtx getFixity (Term x)) = foldFix prettyTermF x
     where
       prettyTermF = \case
         Var _ v            -> pretty v
@@ -168,7 +189,7 @@ instance (HasPrefix v, PrintCons v, Pretty v, Pretty prim) => Pretty (Term prim 
         Lam _ v a          -> parens $ hsep [hcat ["\\", pretty v], "->", a]
         Let _ v a          -> onLet [v] a
         LetRec _ vs a      -> onLet vs a
-        AssertType _ r sig -> parens $ hsep [r, "::", pretty sig]
+        AssertType _ r sig -> parens $ hsep [r, "::", pretty $ FixityCtx getFixity sig]
         Constr _ _ tag     -> pretty tag
         Case _ e alts      -> vcat [ hsep ["case", e, "of"], indent 4 $ vcat $ fmap onAlt alts]
         Bottom _           -> "_|_"
@@ -181,4 +202,24 @@ instance (HasPrefix v, PrintCons v, Pretty v, Pretty prim) => Pretty (Term prim 
             [ pretty caseAlt'tag, hsep $ fmap (pretty . snd . typed'value) caseAlt'args
             , "->"
             , caseAlt'rhs ]
+
+-----------------------------------------------------------------
+-- pretty errors
+
+instance (Pretty loc, PrettyVar var) => Pretty (TypeError loc var) where
+  pretty = pretty . noFixity @var
+
+instance (Pretty loc, PrettyVar var) => Pretty (FixityCtx var (TypeError loc var)) where
+  pretty (FixityCtx getFixity tyErr) = case tyErr of
+    OccursErr src name     -> err src $ hsep ["Occurs error", prettyTy name]
+    UnifyErr src tyA tyB   -> err src $ hsep ["Type mismatch got", inTicks $ prettyTy tyB, "expected", inTicks $ prettyTy tyA]
+    NotInScopeErr src name -> err src $ hsep ["Not in scope", pretty name]
+    SubtypeErr src tyA tyB -> err src $ hsep ["Subtype error", inTicks $ prettyTy tyB, "expected", inTicks $ prettyTy tyA]
+    EmptyCaseExpr src      -> err src $ "Case-expression should have at least one alternative case"
+    FreshNameFound         -> "Impossible happened: failed to eliminate fresh name on type-checker stage"
+    where
+      err src msg = hsep [hcat [pretty src, ":"], msg]
+      inTicks x = hcat ["'", x, "'"]
+      prettyTy = pretty . FixityCtx getFixity
+
 

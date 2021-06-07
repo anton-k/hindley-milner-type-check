@@ -214,11 +214,11 @@ type Out prim loc var = ( Subst (Origin loc) (Name var)
                         )
 
 -- | Infers types for bunch of terms. Terms can be recursive and not-sorted by depndencies.
-inferTermList :: Lang q => ContextOf q -> [(Var q, TermOf q)] -> Either [ErrorOf q] [(Var q, TyTermOf q)]
+inferTermList :: Lang q => ContextOf q -> [Bind (Src q) (Var q) (TermOf q)] -> Either [ErrorOf q] [Bind (Src q) (Var q) (TyTermOf q)]
 inferTermList ctx defs = case defs of
   []  -> pure []
   d:_ ->
-    let topLoc = getLoc $ snd d
+    let topLoc = bind'loc d
     in  fmap fromLetExpr $ inferTerm ctx (toLetExpr topLoc defs)
   where
     toLetExpr loc ds = letRecE loc (fmap toBind ds) (bottomE loc)
@@ -227,18 +227,13 @@ inferTermList ctx defs = case defs of
       (TyTerm (Fix (Ann _ (LetRec _ bs _)))) -> fmap fromBind bs
       _                                      -> error "Imposible happened. Found non let-rec expression"
 
-    toBind (name, term) = Bind
-        { bind'loc =  getLoc term
-        , bind'lhs = name
-        , bind'rhs = term
-        }
-
-    fromBind Bind{..} = (bind'lhs, TyTerm bind'rhs)
+    toBind = id
+    fromBind = fmap TyTerm
 
 -- | Infers types for bunch of terms. Terms can be recursive and not-sorted by depndencies.
 -- It returns only top-level types for all terms.
-inferTypeList :: Lang q => ContextOf q -> [(Var q, TermOf q)] -> Either [ErrorOf q] [(Var q, TypeOf q)]
-inferTypeList ctx defs = fmap (fmap (second termType)) $ inferTermList ctx defs
+inferTypeList :: Lang q => ContextOf q -> [Bind (Src q) (Var q) (TermOf q)] -> Either [ErrorOf q] [Bind (Src q) (Var q) (TypeOf q)]
+inferTypeList ctx defs = fmap (fmap (fmap termType)) $ inferTermList ctx defs
 
 infer :: Lang q => ContextOf' q -> TermOf' q -> InferOf q
 infer ctx (Term (Fix x)) = case x of

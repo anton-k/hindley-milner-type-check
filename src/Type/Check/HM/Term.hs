@@ -69,10 +69,10 @@ data CaseAlt loc v a = CaseAlt
 -- | Local variable definition.
 --
 -- > let lhs = rhs in ...
-data Bind loc var r = Bind
+data Bind loc var a = Bind
   { bind'loc :: loc             -- ^ Source code location
   , bind'lhs :: var             -- ^ Variable name
-  , bind'rhs :: r               -- ^ Definition (right-hand side)
+  , bind'rhs :: a               -- ^ Definition (right-hand side)
   } deriving (Show, Eq, Functor, Foldable, Traversable, Data)
 
 $(deriveShow1 ''TermF)

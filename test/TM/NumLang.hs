@@ -5,13 +5,14 @@
 module TM.NumLang where
 
 import Data.String
-import Data.Bifunctor (second)
 import Test.Tasty
 import Test.Tasty.HUnit
 
 import Data.Either
 import qualified Type.Check.HM as T
 import qualified Data.Map.Strict as M
+
+import Data.Text.Prettyprint.Doc
 
 infixr ~>
 
@@ -21,12 +22,20 @@ data CodeLoc = CodeLoc
   }
   deriving (Show, Eq)
 
+instance Pretty CodeLoc where
+  pretty (CodeLoc row col) = hcat [pretty row, ":", pretty col]
+
 -- | Primitives of our language.
 -- We support integers and booleans
 data Prim
   = PInt CodeLoc Int     -- ^ integers
   | PBool CodeLoc Bool   -- ^ booleans
   deriving (Show, Eq)
+
+instance Pretty Prim where
+  pretty = \case
+    PInt  _ n -> pretty n
+    PBool _ b -> pretty b
 
 -- | Type for variables
 type Var = String
@@ -327,5 +336,13 @@ tests = testGroup "lambda calculus with numbers and booleans"
     check msg ty expr = testCase msg $ Right ty @=? (infer expr)
     fails msg expr = testCase msg $ assertBool "Detected wrong type" $ isLeft (infer expr)
 
-    checkList msg exprs = testCase msg $ assertBool msg $ isRight (T.inferTermList defContext $ fmap (second unExpr) exprs)
+    checkList msg exprs = testCase msg $ assertBool msg $ isRight (T.inferTermList defContext $ fmap (uncurry toBind) exprs)
+
+----------------------------------------------------------
+
+printInfer :: Expr -> IO ()
+printInfer (Expr e) = case T.inferType defContext e of
+  Right ty  -> putStrLn $ show $ pretty ty
+  Left errs -> mapM_ (putStrLn . (++ '\n') . show . pretty) errs
+
 
