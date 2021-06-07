@@ -746,9 +746,6 @@ With that definition we can print the results in the ghci:
 ```
 stack ghci hindley-milner-type-check:hindley-milner-type-check-tests
 
-*Main TM.NumLang TM.SKI> print
-print       printInfer
-
 *Main TM.NumLang TM.SKI> printInfer fact
 Int -> Int
 
