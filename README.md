@@ -765,6 +765,8 @@ Circle -> Point -> Bool
 
 ```
 
+### What's next?
+
 You can find out more examples in the directory `test`. With that 
 we have covered almost all key features of the library. 
 Happy type checking!
