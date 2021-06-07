@@ -699,6 +699,8 @@ So we need to provide instances to pretty print them.
 Let's define how to pretty printer the literals:
 
 ```haskell
+import Data.Text.Prettyprint.Doc
+
 instance Pretty Prim where
   pretty = \case
     PInt  _ n -> pretty n
