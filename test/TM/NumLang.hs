@@ -340,6 +340,7 @@ tests = testGroup "lambda calculus with numbers and booleans"
 
 ----------------------------------------------------------
 
+-- | Prints result of type-inference
 printInfer :: Expr -> IO ()
 printInfer (Expr e) = case T.inferType defContext e of
   Right ty  -> putStrLn $ show $ pretty ty
