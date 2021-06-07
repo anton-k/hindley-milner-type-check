@@ -135,6 +135,23 @@ instance T.Lang NumLang where
     PBool loc _ -> T.conT loc "Bool" []
 ```
 
+Why do we need that instance? Actually this is a tiny trick to make type-signatures 
+of the library more readable. You can see that thy library is generic with many parameters.
+with that some types can type 3 to 5 parameters each and it can add up. But this class let's us define
+short synonyms for many type-names. And instead of 
+
+```haskell
+Term prim loc src -> Either [TypeError loc src var] (TyTerm prim loc src)
+```
+
+We can write:
+
+```haskell
+Lang q => TermOf q -> Either [ErrorOf q] TyTermOf q
+```
+
+You can see the full list of type synonyms in the module `Type.Check.HM.Lang`.
+
 We use language tag `NumLang` to define the instance. 
 Also note the function `getPrimType` it provides types for our literals.
 It's assumed that literals have definite type. 
@@ -457,7 +474,8 @@ infer = T.inferType defContext . unExpr
 check ty expr = Right ty == (infer expr)
 ```
 
-Let's check that the expression is correct:
+Note that if we get errors the function `inferType` tries to return as many errors as 
+it could find. Let's check that the expression is correct:
 
 ```haskell
 check intT intExpr1
