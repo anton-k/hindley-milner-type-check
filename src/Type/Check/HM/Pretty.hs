@@ -21,8 +21,8 @@ import Type.Check.HM.TypeError
 
 -- | Type to querry fixity of infix operations in type variables.
 data FixityCtx var a = FixityCtx
-  { fixity'context :: var -> Maybe OpFix
-  , fixity'data    :: a
+  { fixity'context :: var -> Maybe OpFix   -- ^ Function that provides fixity-type for a given variable
+  , fixity'data    :: a                    -- ^ content
   }
 
 -- | Ignores fixity information
@@ -218,7 +218,7 @@ instance (Pretty loc, PrettyVar var) => Pretty (FixityCtx var (TypeError loc var
     EmptyCaseExpr src      -> err src $ "Case-expression should have at least one alternative case"
     FreshNameFound         -> "Impossible happened: failed to eliminate fresh name on type-checker stage"
     where
-      err src msg = hsep [hcat [pretty src, ":"], msg]
+      err src msg = vcat [hcat [pretty src, ": error: "], indent 4 msg]
       inTicks x = hcat ["'", x, "'"]
       prettyTy = pretty . FixityCtx getFixity
 

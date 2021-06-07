@@ -8,8 +8,10 @@ module Type.Check.HM.Lang(
   , TyTermOf
   , SubstOf
   , ErrorOf
+  , PrettyLang
 ) where
 
+import Type.Check.HM.Pretty
 import Type.Check.HM.Term
 import Type.Check.HM.Subst
 import Type.Check.HM.Type
@@ -65,5 +67,6 @@ type ErrorOf q = TypeError (Src q) (Var q)
 -- | Type substitutions
 type SubstOf q = Subst (Src q) (Var q)
 
+type PrettyLang q = (Lang q, PrettyVar (Var q), Pretty (Src q))
 
 

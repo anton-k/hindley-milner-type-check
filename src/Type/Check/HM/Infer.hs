@@ -50,6 +50,7 @@ module Type.Check.HM.Infer(
   , unifyTypes
   -- * Utils
   , closeSignature
+  , printInfer
 ) where
 
 import Control.Monad.Identity
@@ -72,6 +73,7 @@ import Type.Check.HM.Subst
 import Type.Check.HM.Type
 import Type.Check.HM.TypeError
 import Type.Check.HM.TyTerm
+import Type.Check.HM.Pretty
 
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
@@ -657,4 +659,13 @@ closeSignature :: Ord var => [Type loc var] -> Signature loc var -> Type loc var
 closeSignature argTys sig = apply (Subst $ M.fromList $ zip argNames argTys) monoTy
   where
     (argNames, monoTy) = splitSignature sig
+
+----------------------------------------------------------------------------------
+
+-- | Pretty printer for result of type-inference
+printInfer :: (PrettyLang q) => (Either [ErrorOf q] (TypeOf q)) -> IO ()
+printInfer = \case
+  Right ty  -> putStrLn $ show $ pretty ty
+  Left errs -> mapM_ (putStrLn . (++ "\n") . show . pretty) errs
+
 

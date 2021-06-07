@@ -680,7 +680,92 @@ Let's check the type:
 check (rectT ~> intT) rectSquare
 ```
 
-Yuo can find out more examples in the directory `test`. With that 
+### Better looks for types and terms
+
+If you tried to look at the inferred types you might find them scarry.
+They are defined with fixed-points, and every node is tagged with source code locations.
+This makes it hard to read. Fortunately we have special functions to make it better.
+
+The functions that make it way more easy to read types and terms are defined in the module `Type.Check.HM.Pretty`.
+In Haskell there is a convention to make instance of class `Pretty` for human-readable display of values.
+There are many pretty-printers available. The type-checker library relies on [prettyprinter](https://hackage.haskell.org/package/prettyprinter).
+
+We have instances of the class `Pretty` for `Type`s, `Term`s, `TypeError`s and `Signatures`s.
+Let's use them to look at the result of inference for our language.
+
+But for that we need to define couple of instances for parts of our language.
+Library is generic with respect to literals, code locations and variables. 
+So we need to provide instances to pretty print them.
+Let's define how to pretty printer the literals:
+
+```haskell
+instance Pretty Prim where
+  pretty = \case
+    PInt  _ n -> pretty n
+    PBool _ b -> pretty b
+```
+
+Also we need pretty printer for source code locations:
+
+```haskell
+instance Pretty CodeLoc where
+  pretty (CodeLoc row col) = hcat [pretty row, ":", pretty col]
+```
+
+We don't render code locations in terms but this instance will be handy for 
+printer of type errors. It will let us see nice looking error messages.
+
+For variables we use plain strings and the instance of `Pretty` is already provided in the library.
+Also for custom variables we need to render custom type-constructors.
+For Strings it follows the Haskell customs of separating arguments with spaces and enclosing
+the value in parens. but this can be overrided with class `PrintCons`.
+
+With those instnaces in hand we can pretty print the results of inference algorithm.
+Let's define a helper function for that:
+
+```haskell
+-- | Prints result of type-inference
+printInfer :: Expr -> IO ()
+printInfer (Expr e) = T.printInfer $ T.inferType defContext e
+```
+
+We just reuse the utility function `printInfer`, but it's good to look at it's definition.
+It's very strightforward:
+
+```haskell
+-- | Pretty printer for result of type-inference
+printInfer :: (PrettyLang q) => (Either [ErrorOf q] (TypeOf q)) -> IO ()
+printInfer = \case
+  Right ty  -> putStrLn $ show $ pretty ty
+  Left errs -> mapM_ (putStrLn . (++ "\n") . show . pretty) errs
+```
+
+We can see how we print types and errors in human readable format.
+With that definition we can print the results in the ghci:
+
+```
+stack ghci hindley-milner-type-check:hindley-milner-type-check-tests
+
+*Main TM.NumLang TM.SKI> print
+print       printInfer
+
+*Main TM.NumLang TM.SKI> printInfer fact
+Int -> Int
+
+*Main TM.NumLang TM.SKI> printInfer insideCircle2
+Circle -> Point -> Bool
+
+*Main TM.NumLang TM.SKI> printInfer  failExpr1
+0:0: error:
+    Type mismatch got 'Bool' expected 'Int'
+
+*Main TM.NumLang TM.SKI> printInfer  failExpr3
+0:0: error:
+    Not in scope missingVar
+
+```
+
+You can find out more examples in the directory `test`. With that 
 we have covered almost all key features of the library. 
 Happy type checking!
 

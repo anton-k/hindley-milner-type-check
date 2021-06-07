@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DerivingStrategies #-}
--- | This module contains types for structured type errors.
+-- | This module contains types for type errors.
 module Type.Check.HM.TypeError where
 
 import Control.DeepSeq (NFData)
@@ -20,7 +20,7 @@ data TypeError loc var
   | SubtypeErr loc (Type loc var) (Type loc var)  -- ^ Subtype error (happens on explicit type assertions)
   | NotInScopeErr loc var                         -- ^ Missing signature in context for free-variable.
   | EmptyCaseExpr loc                             -- ^ no case alternatives in the case expression
-  | FreshNameFound                                -- ^ internal error with fresh name substitution
+  | FreshNameFound                                -- ^ internal error with fresh name substitution. Should not normally occur if algorithm is correct.
   deriving stock    (Show, Eq, Functor, Generic, Data)
   deriving anyclass (NFData)
 

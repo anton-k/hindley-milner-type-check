@@ -342,8 +342,5 @@ tests = testGroup "lambda calculus with numbers and booleans"
 
 -- | Prints result of type-inference
 printInfer :: Expr -> IO ()
-printInfer (Expr e) = case T.inferType defContext e of
-  Right ty  -> putStrLn $ show $ pretty ty
-  Left errs -> mapM_ (putStrLn . (++ '\n') . show . pretty) errs
-
+printInfer (Expr e) = T.printInfer $ T.inferType defContext e
 
