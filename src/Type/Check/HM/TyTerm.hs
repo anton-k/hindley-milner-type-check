@@ -3,6 +3,7 @@ module Type.Check.HM.TyTerm(
     Ann(..)
   , TyTerm(..)
   , termType
+  , termSignature
   , tyVarE
   , tyPrimE
   , tyAppE
@@ -49,6 +50,9 @@ newtype TyTerm prim loc v = TyTerm { unTyTerm :: Fix (Ann (Type loc v) (TermF pr
 
 termType :: TyTerm prim loc v -> Type loc v
 termType (TyTerm (Fix (Ann ty _))) = ty
+
+termSignature :: (Ord v, Eq loc) => TyTerm prim loc v -> Signature loc v
+termSignature = typeToSignature . termType
 
 -- tyTerm :: Type loc v -> TermF loc var (Ann () ) -> TyTerm loc var
 tyTerm :: Type loc v -> TermF prim loc v (Fix (Ann (Type loc v) (TermF prim loc v))) -> TyTerm prim loc v

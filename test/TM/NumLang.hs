@@ -5,6 +5,7 @@
 module TM.NumLang where
 
 import Data.String
+import Data.Bifunctor (second)
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -319,9 +320,12 @@ tests = testGroup "lambda calculus with numbers and booleans"
   , check "negate point"    (pointT ~> pointT)              negatePointLam
   , check "rect square"     (rectT ~> intT)                 rectSquare
   , check "inside circle 2" (circleT ~> pointT ~> boolT)    insideCircle2
+  , checkList "list of expressions" [("a", intExpr1), ("b", boolExpr1), ("c", intFun1)]
   ]
   where
     infer = T.inferType defContext . unExpr
     check msg ty expr = testCase msg $ Right ty @=? (infer expr)
     fails msg expr = testCase msg $ assertBool "Detected wrong type" $ isLeft (infer expr)
+
+    checkList msg exprs = testCase msg $ assertBool msg $ isRight (T.inferTermList defContext $ fmap (second unExpr) exprs)
 

@@ -15,12 +15,15 @@ module Type.Check.HM.Term(
   , constrE
   , bottomE
   , freeVars
+  , sortDeps
 ) where
 
 import Control.Arrow
 
 import Data.Data
+import Data.Graph
 import Data.Fix
+import Data.Foldable
 import Data.Set (Set)
 import Data.Eq.Deriving
 import Data.Ord.Deriving
@@ -30,6 +33,7 @@ import Type.Check.HM.Subst
 import Type.Check.HM.Type
 
 import qualified Data.Set as S
+import qualified Data.Sequence as Seq
 
 -- | Term functor. The arguments are
 -- @loc@ for source code locations, @v@ for variables, @r@ for recurion.
@@ -190,7 +194,7 @@ instance LocFunctor (Term prim) where
       mapTyped (Typed ty val) = Typed (mapLoc f ty) (first f val)
 
 -- | Get free variables of the term.
-freeVars :: Ord v => Term lprim oc v -> Set v
+freeVars :: Ord v => Term prim loc v -> Set v
 freeVars = foldFix go . unTerm
   where
     go = \case
@@ -229,4 +233,21 @@ instance TypeFunctor (Term prim) where
 
 instance CanApply (Term prim) where
   apply subst term = mapType (apply subst) term
+
+-------------------------------------------------------------------------
+-- sort terms by dependency order (it ignores cyclic depepndencies)
+
+sortDeps :: Ord v => [(v, Term prim loc v)] -> [(v, Term prim loc v)]
+sortDeps = fromDepGraph . stronglyConnComp . toDepGraph
+  where
+    toDepGraph = fmap (\(name, term) -> ((name, term), name, S.toList $ freeVars term))
+
+    fromDepGraph = toList . foldMap getVertex
+      where
+        getVertex = \case
+          AcyclicSCC v -> Seq.singleton v
+          CyclicSCC vs -> Seq.fromList vs
+
+
+
 
