@@ -11,7 +11,7 @@
 -- >   type Src  TestLang = ()              -- ^ define type for source code locations
 -- >   type Var  TestLang = Text            -- ^ define type for variables
 -- >   type Prim TestLang = NoPrim          -- ^ define type for primitive operators
--- >   getPrimType _ = error "No primops"   -- ^ reports types for primitives
+-- >   getPrimType _ _ = error "No primops"   -- ^ reports types for primitives
 --
 -- Also we define context for type inference that holds types for all known variables
 -- Often it defines types for all global variables or functions that are external.
@@ -266,7 +266,7 @@ inferPrim :: Lang q => Origin (Src q) -> Prim q -> InferOf q
 inferPrim loc prim =
   return (mempty, tyPrimE ty loc prim)
   where
-    ty = fmap Name $ mapLoc UserCode $ getPrimType prim
+    ty = fmap Name $ mapLoc UserCode $ getPrimType (fromOrigin loc) prim
 
 inferApp :: Lang q => ContextOf' q -> Origin (Src q) -> TermOf' q -> TermOf' q -> InferOf q
 inferApp ctx loc f a = {- fmap (\res -> trace (unlines ["APP", ppCtx ctx, ppShow' f, ppShow' a, ppShow' $ snd res]) res) $-} do

@@ -34,8 +34,8 @@ data CodeLoc = CodeLoc
 -- | Primitives of our language.
 -- We support integers and booleans
 data Prim
-  = PInt CodeLoc Int     -- ^ integers
-  | PBool CodeLoc Bool   -- ^ booleans
+  = PInt Int     -- ^ integers
+  | PBool Bool   -- ^ booleans
   deriving (Show, Eq)
 
 -- | Type for variables
@@ -129,10 +129,11 @@ instance T.Lang NumLang where
   type Var  NumLang = Var       -- ^ variables
   type Prim NumLang = Prim      -- ^ primitives
 
-  -- what type is assigned to primitive literals of the language
-  getPrimType = \case
-    PInt  loc _ -> T.conT loc "Int"  []
-    PBool loc _ -> T.conT loc "Bool" []
+  -- What type is assigned to primitive literals of the language.
+  -- loc is a source code location for literal
+  getPrimType loc = \case
+    PInt  _ -> T.conT "Int"  []
+    PBool _ -> T.conT "Bool" []
 ```
 
 Why do we need that instance? Actually this is a tiny trick to make type-signatures 

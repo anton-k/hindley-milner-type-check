@@ -28,14 +28,14 @@ instance Pretty CodeLoc where
 -- | Primitives of our language.
 -- We support integers and booleans
 data Prim
-  = PInt CodeLoc Int     -- ^ integers
-  | PBool CodeLoc Bool   -- ^ booleans
+  = PInt Int     -- ^ integers
+  | PBool Bool   -- ^ booleans
   deriving (Show, Eq)
 
 instance Pretty Prim where
   pretty = \case
-    PInt  _ n -> pretty n
-    PBool _ b -> pretty b
+    PInt  n -> pretty n
+    PBool b -> pretty b
 
 -- | Type for variables
 type Var = String
@@ -61,9 +61,9 @@ instance T.Lang NumLang where
   type Prim NumLang = Prim      -- ^ primitives
 
   -- what type is assigned to primitive literals of the language
-  getPrimType = \case
-    PInt  loc _ -> T.conT loc "Int"  []
-    PBool loc _ -> T.conT loc "Bool" []
+  getPrimType loc = \case
+    PInt  _ -> T.conT loc "Int"  []
+    PBool _ -> T.conT loc "Bool" []
 
 -- | Expressions for our language
 newtype Expr = Expr { unExpr :: T.Term Prim CodeLoc Var }
@@ -77,11 +77,11 @@ defLoc = CodeLoc 0 0
 
 -- | constructor for integer literals
 int :: Int -> Expr
-int = Expr . T.primE defLoc . PInt defLoc
+int = Expr . T.primE defLoc . PInt
 
 -- | constructor for boolean literals
 bool :: Bool -> Expr
-bool = Expr . T.primE defLoc . PBool defLoc
+bool = Expr . T.primE defLoc . PBool
 
 -- numeric expressions
 

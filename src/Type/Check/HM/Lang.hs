@@ -50,7 +50,7 @@ class
   type Prim q
 
   -- | Reports type for primitive.
-  getPrimType :: Prim q -> TypeOf q
+  getPrimType :: Src q -> Prim q -> TypeOf q
 
 -- | Types of our language
 type TypeOf q = Type (Src q) (Var q)

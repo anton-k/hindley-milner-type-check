@@ -35,7 +35,7 @@ instance Lang TestLang where
   type Src  TestLang = ()
   type Var  TestLang = Text
   type Prim TestLang = NoPrim
-  getPrimType _ = error "No primops"
+  getPrimType _ _ = error "No primops"
 
 -- I combinator
 termI,termK :: Term NoPrim () Text
