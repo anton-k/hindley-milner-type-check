@@ -96,7 +96,6 @@ newtype MyVar = MyVar String
   deriving (IsVar)
 ```
 
-
 #### Terms
 
 Let's look at the type `Term` to know what is available to us:
