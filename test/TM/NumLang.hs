@@ -169,25 +169,28 @@ rectT = T.conT defLoc "Rect" []
 
 -- | Point constructor
 point :: Expr -> Expr -> Expr
-point = app2 (Expr $ T.constrE defLoc (intT ~> intT ~> pointT) "Point")
+point = app2 (Expr $ T.constrE defLoc "Point")
 
 circle :: Expr -> Expr -> Expr
-circle = app2 (Expr $ T.constrE defLoc (pointT ~> intT ~> circleT) "Circle")
+circle = app2 (Expr $ T.constrE defLoc "Circle")
 
 rect :: Expr -> Expr -> Expr
-rect = app2 (Expr $ T.constrE defLoc (pointT ~> pointT ~> rectT) "Rect")
+rect = app2 (Expr $ T.constrE defLoc "Rect")
 
 casePoint :: Expr -> (Var, Var) -> Expr -> Expr
 casePoint (Expr e) (x, y) (Expr body) = Expr $ T.caseE defLoc e
-  [T.CaseAlt defLoc "Point" [tyVar intT x, tyVar intT y] pointT body]
+  [T.CaseAlt defLoc "Point" (caseArgs [x, y]) body]
 
 caseCircle :: Expr -> (Var, Var) -> Expr -> Expr
 caseCircle (Expr e) (x, y) (Expr body) = Expr $ T.caseE defLoc e
-  [T.CaseAlt defLoc "Circle" [tyVar pointT x, tyVar intT y] circleT body]
+  [T.CaseAlt defLoc "Circle" (caseArgs [x, y]) body]
 
 caseRect :: Expr -> (Var, Var) -> Expr -> Expr
 caseRect (Expr e) (x, y) (Expr body) = Expr $ T.caseE defLoc e
-  [T.CaseAlt defLoc "Rect" [tyVar pointT x, tyVar pointT y] rectT body]
+  [T.CaseAlt defLoc "Rect" (caseArgs [x, y]) body]
+
+caseArgs :: [Var] -> [(CodeLoc, Var)]
+caseArgs = fmap (\x -> (defLoc, x))
 
 tyVar :: Ty -> Var -> T.Typed CodeLoc Var (CodeLoc, Var)
 tyVar ty v = T.Typed ty (defLoc, v)
@@ -200,13 +203,25 @@ tyVar ty v = T.Typed ty (defLoc, v)
 
 -- | Context contains types for all known definitions
 defContext :: T.Context CodeLoc Var
-defContext = T.Context $ M.fromList $ mconcat
-  [ booleans
-  , nums
-  , comparisons
-  , [("if", forA $ T.monoT $ boolT ~> aT ~> aT ~> aT)]
-  ]
+defContext = T.Context
+  { T.context'binds        = binds
+  , T.context'constructors = cons
+  }
+
   where
+    binds = M.fromList $ mconcat
+      [ booleans
+      , nums
+      , comparisons
+      , [("if", forA $ T.monoT $ boolT ~> aT ~> aT ~> aT)]
+      ]
+
+    cons = M.fromList
+      [ "Point"  `is` (intT ~> intT ~> pointT)
+      , "Circle" `is` (pointT ~> intT ~> circleT)
+      , "Rect"   `is` (pointT ~> pointT ~> rectT)
+      ]
+
     booleans =
       [ "&&"  `is` (boolT ~> boolT ~> boolT)
       , "||"  `is` (boolT ~> boolT ~> boolT)

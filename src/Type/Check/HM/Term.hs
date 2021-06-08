@@ -46,8 +46,7 @@ data TermF prim loc v r
     | LetRec loc [Bind loc v r] r     -- ^ Recursive  let bindings
     | AssertType loc r (Type loc v)   -- ^ Assert type.
     | Case loc r [CaseAlt loc v r]    -- ^ case alternatives
-    | Constr loc (Type loc v) v       -- ^ constructor with tag and arity, also we should provide the type
-                                      --   of constructor as a function for a type-checker
+    | Constr loc v                    -- ^ constructor with tag
     | Bottom loc                      -- ^ value of any type that means failed program.
     deriving (Show, Eq, Functor, Foldable, Traversable, Data)
 
@@ -57,10 +56,8 @@ data CaseAlt loc v a = CaseAlt
   -- ^ source code location
   , caseAlt'tag   :: v
   -- ^ tag of the constructor
-  , caseAlt'args  :: [Typed loc v (loc, v)]
+  , caseAlt'args  :: [(loc, v)]
   -- ^ arguments of the pattern matching
-  , caseAlt'constrType :: Type loc v
-  -- ^ type of the result expression, they should be the same for all cases
   , caseAlt'rhs   :: a
   -- ^ right-hand side of the case-alternative
   }
@@ -101,16 +98,13 @@ instance Functor (Term prim loc) where
         LetRec loc vs a -> Fix $ LetRec loc (fmap (\b ->  b { bind'lhs = f $ bind'lhs b }) vs) a
         AssertType loc r sig -> Fix $ AssertType loc r (fmap f sig)
         Case loc a alts -> Fix $ Case loc a $ fmap (mapAlt f) alts
-        Constr loc ty v -> Fix $ Constr loc (fmap f ty) (f v)
+        Constr loc v -> Fix $ Constr loc (f v)
         Bottom loc -> Fix $ Bottom loc
 
       mapAlt g alt@CaseAlt{..} = alt
         { caseAlt'tag  = f caseAlt'tag
-        , caseAlt'args = fmap (mapTyped g) caseAlt'args
-        , caseAlt'constrType = fmap f caseAlt'constrType
+        , caseAlt'args = fmap (second g) caseAlt'args
         }
-
-      mapTyped g Typed{..} = Typed (fmap f typed'type) (second g typed'value)
 
 -- | 'varE' @loc x@ constructs a variable whose name is @x@ with source code at @loc@.
 varE :: loc -> var -> Term prim loc var
@@ -146,8 +140,8 @@ caseE :: loc -> Term prim loc v -> [CaseAlt loc v (Term prim loc v)] -> Term pri
 caseE loc (Term e) alts = Term $ Fix $ Case loc e $ fmap (fmap unTerm) alts
 
 -- | 'constrE' @loc ty tag arity@ constructs constructor tag expression.
-constrE :: loc -> Type loc v -> v -> Term prim loc v
-constrE loc ty tag = Term $ Fix $ Constr loc ty tag
+constrE :: loc -> v -> Term prim loc v
+constrE loc tag = Term $ Fix $ Constr loc tag
 
 -- | 'bottomE' @loc@ constructs bottom value.
 bottomE :: loc -> Term prim loc v
@@ -166,7 +160,7 @@ instance HasLoc (Term prim loc v) where
     Let loc _ _ -> loc
     LetRec loc _ _ -> loc
     AssertType loc _ _ -> loc
-    Constr loc _ _ -> loc
+    Constr loc _ -> loc
     Case loc _ _ -> loc
     Bottom loc -> loc
 
@@ -181,17 +175,14 @@ instance LocFunctor (Term prim) where
         Let loc v a  -> Fix $ Let (f loc) (v { bind'loc = f $ bind'loc v }) a
         LetRec loc vs a -> Fix $ LetRec (f loc) (fmap (\b ->  b { bind'loc = f $ bind'loc b }) vs) a
         AssertType loc r sig -> Fix $ AssertType (f loc) r (mapLoc f sig)
-        Constr loc ty v -> Fix $ Constr (f loc) (mapLoc f ty) v
+        Constr loc v -> Fix $ Constr (f loc) v
         Case loc e alts -> Fix $ Case (f loc) e (fmap mapAlt alts)
         Bottom loc -> Fix $ Bottom (f loc)
 
       mapAlt alt@CaseAlt{..} = alt
         { caseAlt'loc  = f caseAlt'loc
-        , caseAlt'args = fmap mapTyped caseAlt'args
-        , caseAlt'constrType = mapLoc f caseAlt'constrType
+        , caseAlt'args = fmap (first f) caseAlt'args
         }
-
-      mapTyped (Typed ty val) = Typed (mapLoc f ty) (first f val)
 
 -- | Get free variables of the term.
 freeVars :: Ord v => Term prim loc v -> Set v
@@ -209,27 +200,19 @@ freeVars = foldFix go . unTerm
                              in  (mappend (freeBinds binds) body) `S.difference` lhs
       AssertType _ a _    -> a
       Case _ e alts       -> mappend e (foldMap freeVarAlts alts)
-      Constr _ _ _        -> mempty
+      Constr _ _          -> mempty
       Bottom _            -> mempty
 
     freeBinds = foldMap bind'rhs
 
-    freeVarAlts CaseAlt{..} = caseAlt'rhs `S.difference` (S.fromList $ fmap (snd . typed'value) caseAlt'args)
+    freeVarAlts CaseAlt{..} = caseAlt'rhs `S.difference` (S.fromList $ fmap snd caseAlt'args)
 
 instance TypeFunctor (Term prim) where
   mapType f (Term term) = Term $ foldFix go term
     where
       go = \case
-        Constr loc ty cons       -> Fix $ Constr loc (f ty) cons
-        Case loc e alts          -> Fix $ Case loc e $ fmap applyAlt alts
-        other                    -> Fix other
-
-      applyAlt alt@CaseAlt{..} = alt
-        { caseAlt'args       = fmap applyTyped caseAlt'args
-        , caseAlt'constrType = f caseAlt'constrType
-        }
-
-      applyTyped ty@Typed{..} = ty { typed'type = f typed'type }
+        AssertType loc r ty  -> Fix $ AssertType loc r (f ty)
+        other                 -> Fix other
 
 instance CanApply (Term prim) where
   apply subst term = mapType (apply subst) term

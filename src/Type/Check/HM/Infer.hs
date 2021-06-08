@@ -40,6 +40,8 @@ module Type.Check.HM.Infer(
     Context(..)
   , insertCtx
   , lookupCtx
+  , insertConstructorCtx
+  , lookupConstructorCtx
   , ContextOf
   -- * Inference
   , inferType
@@ -80,22 +82,41 @@ import qualified Data.Set as S
 import qualified Data.List as L
 
 -- | Context holds map of proven signatures for free variables in the expression.
-newtype Context loc v = Context { unContext :: Map v (Signature loc v) }
-  deriving (Show, Eq, Semigroup, Monoid)
+data Context loc v = Context
+  { context'binds         :: Map v (Signature loc v)   -- ^ known binds
+  , context'constructors  :: Map v (Signature loc v)   -- ^ known constructors for user-defined types
+  }
+  deriving (Show, Eq)
+
+instance Ord v => Semigroup (Context loc v) where
+  (<>) (Context bs1 cs1) (Context bs2 cs2) = Context (bs1 <> bs2) (cs1 <> cs2)
+
+instance Ord v => Monoid (Context loc v) where
+  mempty = Context mempty mempty
 
 -- | Type synonym for context.
 type ContextOf q = Context (Src q) (Var q)
 
 instance CanApply Context where
-  apply subst = Context . fmap (apply subst) . unContext
+  apply subst ctx = ctx
+      { context'binds = fmap (apply subst) $ context'binds ctx
+      }
 
 -- | Insert signature into context
 insertCtx :: Ord v => v -> Signature loc v ->  Context loc v -> Context loc v
-insertCtx v sign (Context ctx) = Context $ M.insert v sign ctx
+insertCtx v sign (Context binds cons) = Context (M.insert v sign binds) cons
 
 -- | Lookup signature by name in the context of inferred terms.
 lookupCtx :: Ord v => v -> Context loc v -> Maybe (Signature loc v)
-lookupCtx v (Context ctx) = M.lookup v ctx
+lookupCtx v (Context binds _cons) = M.lookup v binds
+
+-- | Insert signature into context
+insertConstructorCtx :: Ord v => v -> Signature loc v ->  Context loc v -> Context loc v
+insertConstructorCtx v sign (Context binds cons) = Context binds (M.insert v sign cons)
+
+-- | Lookup signature by name in the context of inferred terms.
+lookupConstructorCtx :: Ord v => v -> Context loc v -> Maybe (Signature loc v)
+lookupConstructorCtx v (Context _binds cons) = M.lookup v cons
 
 -- | Wrapper with ability to generate fresh names
 data Name v
@@ -132,20 +153,24 @@ type CaseAltOf' q = CaseAlt (Origin (Src q)) (Name (Var q))
 -- To check the term we need only variables that are free in the term.
 -- So we can safely remove everything else and speed up lookup times.
 restrictContext :: Ord v => Term prim loc v -> Context loc v -> Context loc v
-restrictContext t (Context ctx) = Context $ M.intersection ctx fv
+restrictContext t (Context binds cons) = Context (M.intersection binds fv) cons
   where
     fv = M.fromList $ fmap (, ()) $ S.toList $ freeVars t
 
 wrapContextNames :: Ord v => Context loc v -> Context loc (Name v)
 wrapContextNames = fmapCtx Name
   where
-    fmapCtx f (Context m) = Context $ M.mapKeys f $ M.map (fmap f) m
+    fmapCtx f (Context bs cs) = Context (wrap bs)  (wrap cs)
+      where
+        wrap = M.mapKeys f . M.map (fmap f)
 
 wrapTermNames :: Term prim loc v -> Term prim loc (Name v)
 wrapTermNames = fmap Name
 
 markProven :: Context loc v -> Context (Origin loc) v
-markProven = Context . M.map (mapLoc Proven) . unContext
+markProven (Context bs cs) = Context (mark bs) (mark cs)
+  where
+    mark = M.map (mapLoc Proven)
 
 markUserCode :: Term prim loc v -> Term prim (Origin loc) v
 markUserCode = mapLoc UserCode
@@ -246,7 +271,7 @@ infer ctx (Term (Fix x)) = case x of
   Let loc v a         -> inferLet ctx loc (fmap Term v) (Term a)
   LetRec loc vs a     -> inferLetRec ctx loc (fmap (fmap Term) vs) (Term a)
   AssertType loc a ty -> inferAssertType ctx loc (Term a) ty
-  Constr loc ty tag   -> inferConstr loc ty tag
+  Constr loc tag      -> inferConstr ctx loc tag
   Case loc e alts     -> inferCase ctx loc (Term e) (fmap (fmap Term) alts)
   Bottom loc          -> inferBottom loc
 
@@ -257,7 +282,7 @@ retryWithBottom err loc = do
 
 inferVar :: Lang q => ContextOf' q -> Origin (Src q) -> Name (Var q) -> InferOf q
 inferVar ctx loc v = {- trace (unlines ["VAR", ppShow ctx, ppShow v]) $ -}
-  case M.lookup v (unContext ctx) of
+  case lookupCtx v ctx of
     Nothing  -> retryWithBottom (NotInScopeErr (fromOrigin loc) v) loc
     Just sig -> do ty <- newInstance $ setLoc loc sig
                    return (mempty, tyVarE ty loc v)
@@ -307,7 +332,7 @@ inferLetRec :: forall q . Lang q
   -> InferOf q
 inferLetRec ctx topLoc vs body = do
   lhsCtx <- getTypesLhs vs
-  (phi, rhsTyTerms) <- inferTerms (ctx <> Context (M.fromList lhsCtx)) exprBinds
+  (phi, rhsTyTerms) <- inferTerms (ctx <> Context (M.fromList lhsCtx) mempty) exprBinds
   let (tBinds, bindsTyTerms) = unzip rhsTyTerms
   case unifyRhs ctx lhsCtx phi tBinds of
     Right (ctx1, lhsCtx1, subst) -> inferBody bindsTyTerms ctx1 lhsCtx1 subst body
@@ -347,10 +372,13 @@ inferAssertType ctx loc a ty = do
       return (subst', apply subst' $ tyAssertTypeE loc aTyTerm ty)
     Left err -> retryWithBottom err loc
 
-inferConstr :: Lang q => Origin (Src q) -> TypeOf' q -> Name (Var q) -> InferOf q
-inferConstr loc ty tag = do
-  vT <- newInstance $ typeToSignature ty
-  return (mempty, tyConstrE loc vT tag)
+inferConstr :: Lang q => ContextOf' q -> Origin (Src q) -> Name (Var q) -> InferOf q
+inferConstr ctx loc tag = do
+  case lookupConstructorCtx tag ctx of
+    Just ty -> do
+      vT <- newInstance ty
+      return (mempty, tyConstrE loc vT tag)
+    Nothing -> retryWithBottom (NotInScopeErr (fromOrigin loc) tag) loc
 
 inferCase :: forall q . Lang q
   => ContextOf' q -> Origin (Src q) -> TermOf' q -> [CaseAltOf' q (TermOf' q)]
@@ -359,46 +387,41 @@ inferCase ctx loc e caseAlts = do
   (phi, tyTermE) <- infer ctx e
   (psi, tRes, tyAlts) <- inferAlts phi (termType tyTermE) $ caseAlts
   return ( psi
-         , apply psi $ tyCaseE tRes loc (apply psi tyTermE) $ fmap (applyAlt psi) tyAlts)
+         , apply psi $ tyCaseE tRes loc (apply psi tyTermE) tyAlts)
   where
     inferAlts :: SubstOf' q -> TypeOf' q -> [CaseAltOf' q (TermOf' q)] -> InferM (Src q) (Var q) (SubstOf' q, TypeOf' q, [CaseAltOf' q (TyTermOf' q)])
     inferAlts substE tE alts =
       fmap (\(subst, _, tRes, as) -> (subst, tRes, L.reverse as)) $ foldM go (substE, tE, tE, []) alts
       where
         go initSt@(subst, tyTop, _, res) alt = do
-          (phi, tRes, alt1) <- inferAlt (applyAlt subst alt)
-          let subst1 = subst <> phi
-          case unify subst1 (apply subst1 tyTop) (apply subst1 $ caseAlt'constrType alt1) of
-            Right subst2 -> pure (subst2, apply subst2 tyTop, apply subst2 tRes, applyAlt subst2 alt1 : res)
-            Left err     -> do
-              tell [err]
+          mRes <- inferAlt (applyAlt subst alt)
+          case mRes of
+            Just (phi, tyRhs, tResExpected, alt1) -> do
+              let subst1 = subst <> phi
+              case unify subst1 (apply subst1 tyTop) (apply subst1 tResExpected) of
+                Right subst2 -> pure (subst2, apply subst2 tyTop, apply subst2 tyRhs, applyAlt subst2 alt1 : res)
+                Left err     -> do
+                  tell [err]
+                  pure initSt
+            Nothing -> do
+              tell [NotInScopeErr (fromOrigin $ caseAlt'loc alt) (caseAlt'tag alt)]
               pure initSt
 
-    inferAlt :: CaseAltOf' q (TermOf' q) -> InferM (Src q) (Var q) (SubstOf' q, TypeOf' q, CaseAltOf' q (TyTermOf' q))
-    inferAlt preAlt = do
-      alt <- newCaseAltInstance preAlt
-      let argVars = fmap  (\ty -> (snd $ typed'value ty, (fst $ typed'value ty, typed'type ty))) $ caseAlt'args alt
-          ctx1 = Context (M.fromList $ fmap (second $ monoT . snd) argVars) <> ctx
-      (subst, tyTermRhs) <- infer ctx1 $ caseAlt'rhs alt
-      let args = fmap (\(v, (argLoc, tv)) -> Typed (apply subst tv) (argLoc, v)) argVars
-          alt' = alt
-                  { caseAlt'rhs = tyTermRhs
-                  , caseAlt'args = args
-                  , caseAlt'constrType = apply subst $ caseAlt'constrType alt
-                  }
-      return (subst, termType tyTermRhs, alt')
-
-    newCaseAltInstance :: CaseAltOf' q (TermOf' q) -> InferM (Src q) (Var q) (CaseAltOf' q (TermOf' q))
-    newCaseAltInstance alt = do
-      tv <- newInstance $ typeToSignature $ getCaseType alt
-      let (argsT, resT)= splitFunT tv
-      return $ alt
-        { caseAlt'constrType = resT
-        , caseAlt'args = zipWith (\aT ty -> ty { typed'type = aT }) argsT $ caseAlt'args alt
-        }
-
-    getCaseType :: CaseAltOf' q (TermOf' q) -> TypeOf' q
-    getCaseType CaseAlt{..} = funT (fmap typed'type caseAlt'args) caseAlt'constrType
+    inferAlt :: CaseAltOf' q (TermOf' q) -> InferM (Src q) (Var q) (Maybe (SubstOf' q, TypeOf' q, TypeOf' q, CaseAltOf' q (TyTermOf' q)))
+    inferAlt alt =
+      case lookupConstructorCtx (caseAlt'tag alt) ctx of
+        Just ctxConTy -> do
+          conTy <- newInstance ctxConTy
+          let (tyArgs, tyRes) = splitFunT conTy
+              expectedArity = length tyArgs
+              actualArity   = length $ caseAlt'args alt
+          when (expectedArity /= actualArity) $ tell [ConsArityMismatch (fromOrigin $ caseAlt'loc alt) (caseAlt'tag alt) expectedArity actualArity]
+          let argVars = zipWith (\ty (src, arg) -> (arg, (src, ty))) tyArgs (caseAlt'args alt)
+              ctx1 = Context (M.fromList $ fmap (second $ monoT . snd) argVars) mempty <> ctx
+          (subst, tyTermRhs) <- infer ctx1 $ caseAlt'rhs alt
+          let alt' = alt { caseAlt'rhs = tyTermRhs }
+          return $ Just (subst, termType tyTermRhs, tyRes, alt')
+        Nothing -> pure Nothing
 
     splitFunT :: TypeOf' q -> ([TypeOf' q], TypeOf' q)
     splitFunT arrT = go [] arrT
@@ -407,17 +430,8 @@ inferCase ctx loc e caseAlts = do
           ArrowT _loc a b -> go (Type a : argsT) (Type b)
           other           -> (reverse argsT, Type $ Fix other)
 
+    applyAlt subst alt = alt { caseAlt'rhs = apply subst $ caseAlt'rhs alt }
 
-    funT :: [TypeOf' q] -> TypeOf' q -> TypeOf' q
-    funT argsT resT = foldr (\a b -> arrowT (getLoc a) a b) resT argsT
-
-    applyAlt subst alt@CaseAlt{..} = alt
-      { caseAlt'constrType = apply subst caseAlt'constrType
-      , caseAlt'args       = fmap applyTyped caseAlt'args
-      , caseAlt'rhs        = apply subst caseAlt'rhs
-      }
-      where
-        applyTyped ty@Typed{..} = ty { typed'type = apply subst $ typed'type }
 
 inferBottom :: Lang q => Origin (Src q) -> InferOf q
 inferBottom loc = do
@@ -556,7 +570,7 @@ addDecls :: IsVar v
 addDecls vs ctx =
   foldM  (\c b -> addDecl unknowns b c) ctx vs
   where
-    unknowns = foldMap tyVars $ unContext ctx
+    unknowns = foldMap tyVars $ context'binds ctx
 
 addDecl :: forall loc v . IsVar v
   => VarSet' loc v
@@ -565,7 +579,8 @@ addDecl :: forall loc v . IsVar v
   -> InferM loc v (Context' loc v)
 addDecl unknowns b ctx = do
   scheme <- toScheme unknowns (bind'rhs b)
-  return $ Context . M.insert (bind'lhs b) scheme . unContext $ ctx
+  return $ ctx
+    { context'binds = M.insert (bind'lhs b) scheme . context'binds $ ctx }
   where
     toScheme :: VarSet' loc v -> Type' loc v -> InferM loc v (Signature' loc v)
     toScheme uVars ty = do
@@ -608,6 +623,7 @@ fromTypeErrorNameVar = either id id . \case
     SubtypeErr loc tA tB -> liftA2 (SubtypeErr loc) (fromTypeNameVar tA) (fromTypeNameVar tB)
     NotInScopeErr loc v  -> fmap (NotInScopeErr loc) $ fromNameVar v
     EmptyCaseExpr loc    -> pure $ EmptyCaseExpr loc
+    ConsArityMismatch loc v expected actual -> fmap (\x -> ConsArityMismatch loc x expected actual) (fromNameVar v)
     FreshNameFound       -> pure FreshNameFound
 
 fromTypeNameVar :: Type loc (Name var) -> Either (TypeError loc var) (Type loc var)
@@ -632,19 +648,18 @@ fromTyTermNameVar (TyTerm x) = fmap TyTerm $ foldFixM go x
       Let loc bind a      -> fmap (\b -> Let loc b a) $ fromBind bind
       LetRec loc binds a  -> fmap (\bs -> LetRec loc bs a) $ mapM fromBind binds
       AssertType loc a ty -> fmap (AssertType loc a) $ fromTypeNameVar ty
-      Constr loc t v      -> liftA2 (Constr loc) (fromTypeNameVar t) (fromNameVar v)
+      Constr loc v        -> fmap (Constr loc) (fromNameVar v)
       Bottom loc          -> pure $ Bottom loc
       Case loc e alts     -> fmap (Case loc e) $ mapM fromAlt alts
 
     fromBind b = fmap (\a -> b { bind'lhs = a }) $ fromNameVar $ bind'lhs b
 
     fromAlt alt@CaseAlt{..} =
-      liftA3 (\tag args constrType -> alt { caseAlt'tag = tag, caseAlt'args = args, caseAlt'constrType = constrType })
+      liftA2 (\tag args -> alt { caseAlt'tag = tag, caseAlt'args = args })
         (fromNameVar caseAlt'tag)
-        (mapM fromTyped caseAlt'args)
-        (fromTypeNameVar caseAlt'constrType)
+        (mapM fromAltArg caseAlt'args)
 
-    fromTyped Typed{..} = liftA2 Typed (fromTypeNameVar typed'type) (mapM fromNameVar typed'value)
+    fromAltArg (loc, v) = fmap (loc , ) (fromNameVar v)
 
 fromSubstNameVar :: Ord v => Subst loc (Name v) -> Either (TypeError loc v) (Subst loc v)
 fromSubstNameVar (Subst m) = fmap (Subst . M.fromList) $ mapM uncover $ M.toList m

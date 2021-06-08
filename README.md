@@ -132,12 +132,12 @@ instance T.Lang NumLang where
   -- What type is assigned to primitive literals of the language.
   -- loc is a source code location for literal
   getPrimType loc = \case
-    PInt  _ -> T.conT "Int"  []
+    PInt  _ -> T.conT "Int"  []   -- constant type constructor with no arguments
     PBool _ -> T.conT "Bool" []
 ```
 
 Why do we need that instance? Actually this is a tiny trick to make type-signatures 
-of the library more readable. You can see that thy library is generic with many parameters.
+of the library more readable. You can see that the library is generic with many parameters.
 with that some types can type 3 to 5 parameters each and it can add up. But this class let's us define
 short synonyms for many type-names. And instead of 
 

@@ -190,7 +190,7 @@ instance (PrettyVar v, Pretty prim) => Pretty (FixityCtx v (Term prim loc v)) wh
         Let _ v a          -> onLet [v] a
         LetRec _ vs a      -> onLet vs a
         AssertType _ r sig -> parens $ hsep [r, "::", pretty $ FixityCtx getFixity sig]
-        Constr _ _ tag     -> pretty tag
+        Constr _ tag       -> pretty tag
         Case _ e alts      -> vcat [ hsep ["case", e, "of"], indent 4 $ vcat $ fmap onAlt alts]
         Bottom _           -> "_|_"
         where
@@ -199,7 +199,7 @@ instance (PrettyVar v, Pretty prim) => Pretty (FixityCtx v (Term prim loc v)) wh
                  , hsep ["in ", body]]
 
           onAlt CaseAlt{..} = hsep
-            [ pretty caseAlt'tag, hsep $ fmap (pretty . snd . typed'value) caseAlt'args
+            [ pretty caseAlt'tag, hsep $ fmap (pretty . snd) caseAlt'args
             , "->"
             , caseAlt'rhs ]
 
@@ -217,6 +217,7 @@ instance (Pretty loc, PrettyVar var) => Pretty (FixityCtx var (TypeError loc var
     SubtypeErr src tyA tyB -> err src $ hsep ["Subtype error", inTicks $ prettyTy tyB, "expected", inTicks $ prettyTy tyA]
     EmptyCaseExpr src      -> err src $ "Case-expression should have at least one alternative case"
     FreshNameFound         -> "Impossible happened: failed to eliminate fresh name on type-checker stage"
+    ConsArityMismatch src tag expected actual -> err src $ hsep ["Case-expression arguments mismatch for ", pretty tag, ". Expected ", pretty expected, " arguments, but got ", pretty actual]
     where
       err src msg = vcat [hcat [pretty src, ": error: "], indent 4 msg]
       inTicks x = hcat ["'", x, "'"]

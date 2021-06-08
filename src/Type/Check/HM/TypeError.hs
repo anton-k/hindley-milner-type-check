@@ -19,6 +19,12 @@ data TypeError loc var
   | UnifyErr   loc (Type loc var) (Type loc var)  -- ^ Unification error
   | SubtypeErr loc (Type loc var) (Type loc var)  -- ^ Subtype error (happens on explicit type assertions)
   | NotInScopeErr loc var                         -- ^ Missing signature in context for free-variable.
+  | ConsArityMismatch
+      { consArityMismatch'loc :: loc
+      , consArityMismatch'tag :: var
+      , consArityMismatch'expected :: Int
+      , consArityMismatch'actual   :: Int
+      } -- ^ mismatch of arity in pattern-matching
   | EmptyCaseExpr loc                             -- ^ no case alternatives in the case expression
   | FreshNameFound                                -- ^ internal error with fresh name substitution. Should not normally occur if algorithm is correct.
   deriving stock    (Show, Eq, Functor, Generic, Data)
@@ -30,6 +36,7 @@ instance LocFunctor TypeError where
     UnifyErr loc tA tB   -> UnifyErr (f loc) (mapLoc f tA) (mapLoc f tB)
     SubtypeErr loc tA tB -> SubtypeErr (f loc) (mapLoc f tA) (mapLoc f tB)
     NotInScopeErr loc v  -> NotInScopeErr (f loc) v
+    ConsArityMismatch loc tag expect actual -> ConsArityMismatch (f loc)  tag expect actual
     EmptyCaseExpr loc    -> EmptyCaseExpr (f loc)
     FreshNameFound       -> FreshNameFound
 
@@ -39,6 +46,7 @@ instance HasTypeVars TypeError where
     UnifyErr _ a b     -> tyVars a <> tyVars b
     SubtypeErr _ a b   -> tyVars a <> tyVars b
     NotInScopeErr _ _  -> mempty
+    ConsArityMismatch _ _ _ _ -> mempty
     EmptyCaseExpr _    -> mempty
     FreshNameFound     -> mempty
 
@@ -49,6 +57,7 @@ instance HasTypeVars TypeError where
     NotInScopeErr _ _  -> mempty
     EmptyCaseExpr _    -> mempty
     FreshNameFound     -> mempty
+    ConsArityMismatch _ _ _ _ -> mempty
 
 instance CanApply TypeError where
   apply f = \case
