@@ -58,6 +58,45 @@ import qualified Type.Check.HM as T
 newtype Expr = Expr { unExpr :: T.Term Prim CodeLoc Var }
 ```
 
+#### Variables 
+
+In our simple case we used just strings for variables. 
+But there are some things to note about variables if you want to use your own type. 
+
+For type to be a variable it has to have instance of class `IsVar` which defines single method:
+
+```haskell
+-- | Functions we need for variables to do type-inference.
+class (Show v, Ord v) => IsVar v where
+  -- | Canonical leters for pretty output
+  prettyLetters :: [v]
+```
+
+Pretty letters are the good human-readable names in alphabetical order for variables.
+Why do we need them? During type inference we allocate internal fresh names for varuables.
+Algorithm just needs that facility. We use the list of pretty letters to substitute 
+those names for good-looking to the user ones. It's probably an infinite list of all names
+sorted from simplest to more complicated ones.
+
+Luckily we already have instances for `String`, `Text` and `Int`.
+If we want to have our own wrapper around those types we can easily derive 
+the names. Just don't forget that we need the instanc eof `IsVar` for algorithm to work properly:
+
+```haskell
+newtype MyVar = MyVar String
+
+instance IsVar MyVar where
+  prettyLetters = fmap MyVar prettyLetters
+```
+
+or with extension `GeneralizedNewtypeDeriving` we can just derive this instance:
+
+```haskell
+newtype MyVar = MyVar String
+  deriving (IsVar)
+```
+
+
 #### Terms
 
 Let's look at the type `Term` to know what is available to us:
