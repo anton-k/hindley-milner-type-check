@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
 -- | Tests for language with lambda calculus with numbers and booleans.
 module TM.NumLang where
@@ -162,10 +163,11 @@ lam v (Expr fun) = Expr $ T.lamE defLoc v fun
 -- custom constructors
 
 -- types for custom types
-pointT, circleT, rectT :: Ty
+pointT, circleT, rectT, colorT :: Ty
 pointT  = T.conT defLoc "Point" []
 circleT = T.conT defLoc "Circle" []
 rectT = T.conT defLoc "Rect" []
+colorT = T.conT defLoc "Color" []
 
 -- | Point constructor
 point :: Expr -> Expr -> Expr
@@ -176,6 +178,11 @@ circle = app2 (Expr $ T.constrE defLoc "Circle")
 
 rect :: Expr -> Expr -> Expr
 rect = app2 (Expr $ T.constrE defLoc "Rect")
+
+red, blue, green :: Expr
+red   = Expr $ T.constrE defLoc "Red"
+blue  = Expr $ T.constrE defLoc "Blue"
+green = Expr $ T.constrE defLoc "Green"
 
 casePoint :: Expr -> (Var, Var) -> Expr -> Expr
 casePoint (Expr e) (x, y) (Expr body) = Expr $ T.caseE defLoc e
@@ -192,8 +199,18 @@ caseRect (Expr e) (x, y) (Expr body) = Expr $ T.caseE defLoc e
 caseArgs :: [Var] -> [(CodeLoc, Var)]
 caseArgs = fmap (\x -> (defLoc, x))
 
-tyVar :: Ty -> Var -> T.Typed CodeLoc Var (CodeLoc, Var)
-tyVar ty v = T.Typed ty (defLoc, v)
+data CaseColor = CaseColor
+  { case'red   :: Expr
+  , case'blue  :: Expr
+  , case'green :: Expr
+  }
+
+caseColor :: Expr -> CaseColor -> Expr
+caseColor (Expr e) CaseColor{..} = Expr $ T.caseE defLoc e
+  [ T.CaseAlt defLoc "Red"   [] (unExpr $ case'red)
+  , T.CaseAlt defLoc "Blue"  [] (unExpr $ case'blue)
+  , T.CaseAlt defLoc "Green" [] (unExpr $ case'green)
+  ]
 
 ----------------------------------------------------------
 -- Type inference context
@@ -207,7 +224,6 @@ defContext = T.Context
   { T.context'binds        = binds
   , T.context'constructors = cons
   }
-
   where
     binds = M.fromList $ mconcat
       [ booleans
@@ -220,6 +236,9 @@ defContext = T.Context
       [ "Point"  `is` (intT ~> intT ~> pointT)
       , "Circle" `is` (pointT ~> intT ~> circleT)
       , "Rect"   `is` (pointT ~> pointT ~> rectT)
+      , "Red"    `is` colorT
+      , "Blue"   `is` colorT
+      , "Green"  `is` colorT
       ]
 
     booleans =
@@ -254,6 +273,20 @@ intExpr1 = negate $ ((20::Expr) + 30) * 100
 
 boolExpr1 :: Expr
 boolExpr1 = andB (andB (notB ((intExpr1 `lte` 1000) `orB` (2 `gt` 0))) (bool True)) (5 `neq` (2 + 2))
+
+colorFun :: Expr
+colorFun = lam "c" $ caseColor "c" CaseColor
+  { case'red   = 1
+  , case'blue  = 2
+  , case'green = 3
+  }
+
+colorFunFail :: Expr
+colorFunFail = lam "c" $ caseColor "c" CaseColor
+  { case'red   = 1
+  , case'blue  = bool True
+  , case'green = 3
+  }
 
 failExpr1 :: Expr
 failExpr1 = lam "x" $ 2 + "x" `eq` (bool True)
@@ -344,6 +377,8 @@ tests = testGroup "lambda calculus with numbers and booleans"
   , check "negate point"    (pointT ~> pointT)              negatePointLam
   , check "rect square"     (rectT ~> intT)                 rectSquare
   , check "inside circle 2" (circleT ~> pointT ~> boolT)    insideCircle2
+  , check "color fun"       (colorT ~> intT)                colorFun
+  , fails "color fun fail"  colorFunFail
   , checkList "list of expressions" [("a", intExpr1), ("b", boolExpr1), ("c", intFun1)]
   ]
   where

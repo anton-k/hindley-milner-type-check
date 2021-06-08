@@ -385,21 +385,34 @@ inferCase :: forall q . Lang q
   -> InferOf q
 inferCase ctx loc e caseAlts = do
   (phi, tyTermE) <- infer ctx e
-  (psi, tRes, tyAlts) <- inferAlts phi (termType tyTermE) $ caseAlts
-  return ( psi
-         , apply psi $ tyCaseE tRes loc (apply psi tyTermE) tyAlts)
+  mAlts <- inferAlts phi (termType tyTermE) $ caseAlts
+  case mAlts of
+    Just (psi, tRes, tyAlts) -> return ( psi
+                                       , apply psi $ tyCaseE tRes loc (apply psi tyTermE) tyAlts)
+    Nothing -> retryWithBottom (EmptyCaseExpr (fromOrigin loc)) loc
   where
-    inferAlts :: SubstOf' q -> TypeOf' q -> [CaseAltOf' q (TermOf' q)] -> InferM (Src q) (Var q) (SubstOf' q, TypeOf' q, [CaseAltOf' q (TyTermOf' q)])
-    inferAlts substE tE alts =
-      fmap (\(subst, _, tRes, as) -> (subst, tRes, L.reverse as)) $ foldM go (substE, tE, tE, []) alts
+    inferAlts :: SubstOf' q -> TypeOf' q -> [CaseAltOf' q (TermOf' q)] -> InferM (Src q) (Var q) (Maybe (SubstOf' q, TypeOf' q, [CaseAltOf' q (TyTermOf' q)]))
+    inferAlts substE tE alts = do
+      (subst, _, mTRes, as) <- foldM go (substE, tE, Nothing, []) alts
+      pure $ case mTRes of
+        Just tRes -> Just (subst, tRes, L.reverse as)
+        Nothing   -> Nothing
       where
-        go initSt@(subst, tyTop, _, res) alt = do
+        go initSt@(subst, tyTop, mTyPrevRhs, res) alt = do
           mRes <- inferAlt (applyAlt subst alt)
           case mRes of
             Just (phi, tyRhs, tResExpected, alt1) -> do
               let subst1 = subst <> phi
               case unify subst1 (apply subst1 tyTop) (apply subst1 tResExpected) of
-                Right subst2 -> pure (subst2, apply subst2 tyTop, apply subst2 tyRhs, applyAlt subst2 alt1 : res)
+                Right subst2 -> do
+                  case mTyPrevRhs of
+                    Nothing -> pure (subst2, apply subst2 tyTop, Just $ apply subst2 tyRhs, applyAlt subst2 alt1 : res)
+                    Just tyPrevRhs -> do
+                      case unify subst2 (apply subst2 tyRhs) (apply subst2 tyPrevRhs) of
+                        Right subst3 -> pure (subst3, apply subst3 tyTop, Just $ apply subst3 tyRhs, applyAlt subst3 alt1 : res)
+                        Left err     -> do
+                          tell [err]
+                          pure initSt
                 Left err     -> do
                   tell [err]
                   pure initSt
