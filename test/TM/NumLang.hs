@@ -169,6 +169,9 @@ circleT = T.conT defLoc "Circle" []
 rectT = T.conT defLoc "Rect" []
 colorT = T.conT defLoc "Color" []
 
+maybeT :: Ty -> Ty
+maybeT a = T.conT defLoc "Maybe" [a]
+
 -- | Point constructor
 point :: Expr -> Expr -> Expr
 point = app2 (Expr $ T.constrE defLoc "Point")
@@ -183,6 +186,12 @@ red, blue, green :: Expr
 red   = Expr $ T.constrE defLoc "Red"
 blue  = Expr $ T.constrE defLoc "Blue"
 green = Expr $ T.constrE defLoc "Green"
+
+just :: Expr -> Expr
+just = app (Expr $ T.constrE defLoc "Just")
+
+nothing :: Expr
+nothing = Expr $ T.constrE defLoc "Nothing"
 
 casePoint :: Expr -> (Var, Var) -> Expr -> Expr
 casePoint (Expr e) (x, y) (Expr body) = Expr $ T.caseE defLoc e
@@ -212,6 +221,17 @@ caseColor (Expr e) CaseColor{..} = Expr $ T.caseE defLoc e
   , T.CaseAlt defLoc "Green" [] (unExpr $ case'green)
   ]
 
+data CaseMaybe = CaseMaybe
+  { case'just    :: Expr -> Expr
+  , case'nothing :: Expr
+  }
+
+caseMaybe :: Expr -> CaseMaybe -> Expr
+caseMaybe (Expr e) CaseMaybe{..} = Expr $ T.caseE defLoc e
+  [ T.CaseAlt defLoc "Just"    [(defLoc, "$justArg")] (unExpr $ case'just "$justArg")
+  , T.CaseAlt defLoc "Nothing" []              (unExpr case'nothing)
+  ]
+
 ----------------------------------------------------------
 -- Type inference context
 --
@@ -239,6 +259,8 @@ defContext = T.Context
       , "Red"    `is` colorT
       , "Blue"   `is` colorT
       , "Green"  `is` colorT
+      , ("Just"    , forA $ T.monoT $ aT ~> maybeT aT)
+      , ("Nothing" , forA $ T.monoT $ maybeT aT)
       ]
 
     booleans =
@@ -281,11 +303,43 @@ colorFun = lam "c" $ caseColor "c" CaseColor
   , case'green = 3
   }
 
+colorFun2 :: Expr
+colorFun2 = lam "c" $ caseColor "c" CaseColor
+  { case'red   = nothing
+  , case'blue  = just $ bool True
+  , case'green = just $ bool False
+  }
+
+colorFun3 :: Expr
+colorFun3 = lam "c" $ caseColor "c" CaseColor
+  { case'blue  = just $ bool True
+  , case'green = just $ bool False
+  , case'red   = nothing
+  }
+
+colorFun4 :: Expr
+colorFun4 = lam "mc" $ caseMaybe "mc" CaseMaybe
+  { case'just    = id
+  , case'nothing = red
+  }
+
 colorFunFail :: Expr
 colorFunFail = lam "c" $ caseColor "c" CaseColor
   { case'red   = 1
   , case'blue  = bool True
   , case'green = 3
+  }
+
+mapMaybe :: Expr
+mapMaybe = lam "f" $ lam "ma" $ caseMaybe "ma" CaseMaybe
+  { case'nothing = nothing
+  , case'just    = \a -> just $ app "f" a
+  }
+
+bindMaybe :: Expr
+bindMaybe = lam "ma" $ lam "mf" $ caseMaybe "ma" CaseMaybe
+  { case'nothing = nothing
+  , case'just    = \a -> app "mf" a
   }
 
 failExpr1 :: Expr
@@ -378,10 +432,18 @@ tests = testGroup "lambda calculus with numbers and booleans"
   , check "rect square"     (rectT ~> intT)                 rectSquare
   , check "inside circle 2" (circleT ~> pointT ~> boolT)    insideCircle2
   , check "color fun"       (colorT ~> intT)                colorFun
+  , check "color fun 2"     (colorT ~> maybeT boolT)        colorFun2
+  , check "color fun 3"     (colorT ~> maybeT boolT)        colorFun3
+  , check "color fun 4"     (maybeT colorT ~> colorT)       colorFun4
+  , check "map maybe"       ((aT ~> bT) ~> maybeT aT ~> maybeT bT) mapMaybe
+  , check "bind maybe"      (maybeT aT ~> (aT ~> maybeT bT) ~> maybeT bT) bindMaybe
   , fails "color fun fail"  colorFunFail
   , checkList "list of expressions" [("a", intExpr1), ("b", boolExpr1), ("c", intFun1)]
   ]
   where
+    aT = T.varT defLoc "a"
+    bT = T.varT defLoc "b"
+
     infer = T.inferType defContext . unExpr
     check msg ty expr = testCase msg $ Right ty @=? (infer expr)
     fails msg expr = testCase msg $ assertBool "Detected wrong type" $ isLeft (infer expr)
