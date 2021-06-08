@@ -80,7 +80,7 @@ data TermF prim loc v r
     | LetRec loc [Bind loc v r] r     -- ^ Recursive  let bindings
     | AssertType loc r (Type loc v)   -- ^ Assert type.
     | Case loc r [CaseAlt loc v r]    -- ^ case alternatives
-    | Constr loc (Type loc v) v       -- ^ constructor with tag and arity, also we should provide the type
+    | Constr loc v                    -- ^ constructor with tag and arity, also we should provide the type
                                       --   of constructor as a function for a type-checker
     | Bottom loc                      -- ^ value of any type that means failed program.
     deriving (Show, Eq, Functor, Foldable, Traversable, Data)
@@ -452,13 +452,19 @@ import qualified Data.Map.Strict as M
 
 -- | Context contains types for all known definitions
 defContext :: T.Context CodeLoc Var
-defContext = T.Context $ M.fromList $ mconcat
-  [ booleans
-  , nums
-  , comparisons
-  , [ifSig]
-  ]
+defContext = T.Context 
+  { context'binds = M.fromList $ mconcat
+      [ booleans
+      , nums
+      , comparisons
+      , [ifSig]
+      ]
+  , context'constructors = mempty
+  }
 ```
+
+We ignore the constructors so far. In this field we provide information about type signatures of 
+for user-defined constructors.
 
 ### Type-check expressions
 
@@ -507,10 +513,9 @@ In the file `test/Tm/NumLang.hs` you can find many more examples.
 
 ### User-defined types and pattern matching
 
-we can type-check expressions with user defined data-types. 
+We can type-check expressions with user defined data-types. 
 For user's data types we assume that for any constructor we know its type.
-We augment all constructor expressions and case-expressions with information on
-data-types.
+We provide this information in the Context of inference,
 
 Let's define data-type of points and rectangles and type-check the function 
 that calculates the square of rectangle.
@@ -529,11 +534,11 @@ Let's also define constructors:
 ```haskell
 -- | Point constructor
 point :: Expr -> Expr -> Expr
-point = app2 (Expr $ T.constrE defLoc (intT ~> intT ~> pointT) "Point")
+point = app2 (Expr $ T.constrE defLoc "Point")
 
 -- | Rectangle constructor
 rect :: Expr -> Expr -> Expr
-rect = app2 (Expr $ T.constrE defLoc (pointT ~> pointT ~> rectT) "Rect")
+rect = app2 (Expr $ T.constrE defLoc "Rect")
 ```
 
 Note that we can use already defined type for point in the definition of rectangle.
@@ -553,10 +558,8 @@ data CaseAlt loc v a = CaseAlt
   -- ^ source code location
   , caseAlt'tag   :: v
   -- ^ tag of the constructor
-  , caseAlt'args  :: [Typed loc v (loc, v)]
+  , caseAlt'args  :: [(loc, v)]
   -- ^ arguments of the pattern matching
-  , caseAlt'constrType :: Type loc v
-  -- ^ type of the result expression, they should be the same for all cases
   , caseAlt'rhs   :: a
   -- ^ right-hand side of the case-alternative
   }
@@ -566,7 +569,7 @@ data CaseAlt loc v a = CaseAlt
 
 Seems to be quite involved, but let's break it appart.
 Case expression takes in location, expression against which pattern matching happens
-and the list of laternatives. 
+and the list of alternatives. 
 
 In Haskell example:
 
@@ -598,10 +601,7 @@ In the `CaseAlt` we provide additional information on:
 
 * `caseAlt'tag` is constructor name
 
-* `caseAlt'args` are arguments of the constructor. Note that they are typed, ie we 
-    have to provide the type information for arguments explicitly. We know this by the name of the constructor.
-
-* `caseAlt'constrType` is the type of the result (for example `Maybe Int`)
+* `caseAlt'args` are arguments of the constructor with code locations
 
 * `caseAlt'rhs` is right hand side of the case-expression (`f a`).
 
@@ -610,10 +610,10 @@ With this in mind let's define  ahelper for `case`-expressions over points:
 ```haskell
 casePoint :: Expr -> (Var, Var) -> Expr -> Expr
 casePoint (Expr e) (x, y) (Expr body) = Expr $ T.caseE defLoc e
-  [T.CaseAlt defLoc "Point" [tyVar intT x, tyVar intT y] pointT body]
+  [T.CaseAlt defLoc "Point" (caseArgs [x, y]) body]
 
-tyVar :: Ty -> Var -> T.Typed CodeLoc Var (CodeLoc, Var)
-tyVar ty v = T.Typed ty (defLoc, v)
+caseArgs :: [Var] -> [(CodeLoc, Var)]
+caseArgs = fmap (\x -> (defLoc, x))
 ```
 
 Also we can define the same function for rectangles:
@@ -621,8 +621,32 @@ Also we can define the same function for rectangles:
 ```haskell
 caseRect :: Expr -> (Var, Var) -> Expr -> Expr
 caseRect (Expr e) (x, y) (Expr body) = Expr $ T.caseE defLoc e
-  [T.CaseAlt defLoc "Rect" [tyVar pointT x, tyVar pointT y] rectT body]
+  [T.CaseAlt defLoc "Rect" (caseArgs [x, y]) body]
 ```
+#### Context for user-defined types
+
+Now we use user-defined types and for type-inference to work we need to
+provide information on types of all constructors in the context of type inference.
+We use the field `context'constructors` for that. Let's define it for our custom types:
+
+```haskell
+defContext :: T.Context CodeLoc Var
+defContext = T.Context
+  { T.context'binds        = binds
+  , T.context'constructors = cons
+  }
+  where
+    binds = ... -- is the same as in prev example
+
+    cons = M.fromList
+      [ "Point"  `is` (intT ~> intT ~> pointT)
+      , "Circle" `is` (pointT ~> intT ~> circleT)
+      , "Rect"   `is` (pointT ~> pointT ~> rectT)
+      ]
+```
+
+We should provide types for all constructors. With this information inference can 
+deal with constructors and pattern-matching expressions.
 
 #### Expressions with user-defined types
 
