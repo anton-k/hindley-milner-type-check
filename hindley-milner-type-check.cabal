@@ -1,5 +1,5 @@
 name:                   hindley-milner-type-check
-version:                0.1.0.0
+version:                0.1.1.0
 synopsis:               Type inference for Hindley-Milner based languages
 description:
     This package contains an implemention of Hindley-Milner inference algorithm.
