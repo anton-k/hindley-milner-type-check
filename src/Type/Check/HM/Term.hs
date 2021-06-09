@@ -36,7 +36,7 @@ import qualified Data.Set as S
 import qualified Data.Sequence as Seq
 
 -- | Term functor. The arguments are
--- @loc@ for source code locations, @v@ for variables, @r@ for recurion.
+-- @loc@ for source code locations, @v@ for variables, @r@ for recursion.
 data TermF prim loc v r
     = Var loc v                       -- ^ Variables.
     | Prim loc prim                   -- ^ Primitives.
@@ -218,7 +218,7 @@ instance CanApply (Term prim) where
   apply subst term = mapType (apply subst) term
 
 -------------------------------------------------------------------------
--- sort terms by dependency order (it ignores cyclic depepndencies)
+-- sort terms by dependency order (it ignores cyclic dependencies)
 
 sortDeps :: Ord v => [(v, Term prim loc v)] -> [(v, Term prim loc v)]
 sortDeps = fromDepGraph . stronglyConnComp . toDepGraph

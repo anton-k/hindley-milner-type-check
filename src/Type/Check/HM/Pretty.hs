@@ -19,7 +19,7 @@ import Type.Check.HM.Type
 import Type.Check.HM.Term
 import Type.Check.HM.TypeError
 
--- | Type to querry fixity of infix operations in type variables.
+-- | Type to query fixity of infix operations in type variables.
 data FixityCtx var a = FixityCtx
   { fixity'context :: var -> Maybe OpFix   -- ^ Function that provides fixity-type for a given variable
   , fixity'data    :: a                    -- ^ content
