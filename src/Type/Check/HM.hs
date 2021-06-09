@@ -1,4 +1,4 @@
--- | This module exports all useful functions of the library
+-- | This module exports all the useful functions of the library
 module Type.Check.HM (
   -- * Language definition
   module Type.Check.HM.Lang,

@@ -55,7 +55,7 @@ intT  = T.conT defLoc "Int" []
 -- | Language tag (we need it for Lang instance)
 data NumLang
 
--- | Instanciate to provide the right components of the language
+-- | Instantiate to provide the right components of the language
 instance T.Lang NumLang where
   type Src  NumLang = CodeLoc   -- ^ source code locations
   type Var  NumLang = Var       -- ^ variables

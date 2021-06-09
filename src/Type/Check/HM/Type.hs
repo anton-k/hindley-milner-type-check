@@ -108,7 +108,7 @@ instance DefLoc () where
 --
 -- * @r@ - recursion
 --
--- There are only two requried constructors: @VarT@ and @ConT@
+-- There are only two required constructors: @VarT@ and @ConT@
 -- other constructors are used for convenience of pretty-printing the type.
 data TypeF loc var r
     = VarT loc var      -- ^ Variables
@@ -183,7 +183,7 @@ $(deriveShow1 ''SignatureF)
 $(deriveEq1   ''SignatureF)
 $(deriveOrd1  ''SignatureF)
 
--- | Signaure is a special type that we need for type inference algorithm.
+-- | Signature is a special type that we need for type inference algorithm.
 -- We specify which variables in the type are schematic (non-free).
 newtype Signature loc var = Signature { unSignature :: Fix (SignatureF loc var)
   } deriving (Show, Eq, Ord, Data)
@@ -238,7 +238,7 @@ instance LocFunctor Signature where
         ForAllT loc var a -> Fix $ ForAllT (f loc) var a
         MonoT ty          -> Fix $ MonoT $ mapLoc f ty
 
--- | Mapps over all types that are contained in the value
+-- | Maps over all types that are contained in the value
 class TypeFunctor f where
   mapType :: (Type loc var -> Type loc var) -> f loc var -> f loc var
 

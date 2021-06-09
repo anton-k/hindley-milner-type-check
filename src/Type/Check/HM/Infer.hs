@@ -185,7 +185,7 @@ chooseUserOrigin x y = case (x, y) of
 -- that have to be checked.
 --
 -- We use it on unification failure to show source locations in the user code and not in the
--- expression that is already was proven.
+-- expression that was already proven.
 data Origin a
   = Proven a
   -- ^ Proven source code location
@@ -240,7 +240,7 @@ type Out prim loc var = ( Subst (Origin loc) (Name var)
                         , TyTerm prim (Origin loc) (Name var)
                         )
 
--- | Infers types for bunch of terms. Terms can be recursive and not-sorted by depndencies.
+-- | Infers types for bunch of terms. Terms can be recursive and not-sorted by dependencies.
 inferTermList :: Lang q => ContextOf q -> [Bind (Src q) (Var q) (TermOf q)] -> Either [ErrorOf q] [Bind (Src q) (Var q) (TyTermOf q)]
 inferTermList ctx defs = case defs of
   []  -> pure []
@@ -257,7 +257,7 @@ inferTermList ctx defs = case defs of
     toBind = id
     fromBind = fmap TyTerm
 
--- | Infers types for bunch of terms. Terms can be recursive and not-sorted by depndencies.
+-- | Infers types for bunch of terms. Terms can be recursive and not-sorted by dependencies.
 -- It returns only top-level types for all terms.
 inferTypeList :: Lang q => ContextOf q -> [Bind (Src q) (Var q) (TermOf q)] -> Either [ErrorOf q] [Bind (Src q) (Var q) (TypeOf q)]
 inferTypeList ctx defs = fmap (fmap (fmap termType)) $ inferTermList ctx defs
@@ -481,7 +481,7 @@ inferTerms ctx ts = case ts of
            , (apply psi ta, apply psi termA) : tas
            )
 
--- | Unification function. Checks weather two types unify.
+-- | Unification function. Checks whether two types unify.
 -- First argument is current substitution.
 unify :: (IsVar v, Show loc)
   => Subst' loc v
@@ -620,7 +620,7 @@ normaliseSubst x =
 ------------------------------------------------
 --
 
--- | Checks weather two types unify. If they do it returns substitution that unifies them.
+-- | Checks whether two types unify. If they do it returns substitution that unifies them.
 unifyTypes :: (Show loc, IsVar v, Eq loc) => Type loc v -> Type loc v -> Either (TypeError loc v) (Subst loc v)
 unifyTypes a b =
   join $ bimap (fromTypeErrorNameVar . normaliseType) (fromSubstNameVar . fromSubstOrigin) $

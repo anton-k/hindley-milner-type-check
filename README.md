@@ -13,12 +13,12 @@ need to use source code locations you can use type `()` for it.
 
 ## Tutorial
 
-Let look at how to use the library with simple example. We are going to 
+Let's look at how to use the library with simple example. We are going to 
 define a tiny language with lambda calculus, integer and boolean expressions and custom data types.
 Complete code for this tutorial can be found in tests at `test/TM/NumLang.hs`
 
 To use the type-checker we need to specify which types we use for variable names,
-source code locations and primitive literals. Let's define thoase types:
+source code locations and primitive literals. Let's define those types:
 
 
 ### Language definition
@@ -43,7 +43,7 @@ type Var = String
 ```
 
 The type `CodeLoc` contains line and colum for location of the term. This info 
-can be useful for reporting of errors of parsing or type-checker. This info is supplied
+can be useful for parser or type-checker error reporting. This info is supplied
 by parser. Each term is annotated with code locations.
 
 The type `Prim` contains literals of our language. We support integers and booleans.
@@ -108,7 +108,7 @@ newtype Term prim loc v = Term { unTerm :: Fix (TermF prim loc v) }
 
 ```haskell
 -- | Term functor. The arguments are
--- @loc@ for source code locations, @v@ for variables, @r@ for recurion.
+-- @loc@ for source code locations, @v@ for variables, @r@ for recursion.
 data TermF prim loc v r
     = Var loc v                       -- ^ Variables.
     | Prim loc prim                   -- ^ Primitives.
@@ -126,11 +126,11 @@ data TermF prim loc v r
 
 We can see that AST is minimal but quite capable language. 
 It can express lambda calculus with let-expressions, case-expressions for pattern matching,
-recursive let-exprressionsm custom constructors, type-assertions and bottoms.
+recursive let-expressions, custom constructors, type-assertions and bottoms.
 
 It's defined in Fix-point style. The last parameter of functor `TermF` is going to be recursive
 parameter in the `Term`. If you are not familiar with fixed-point types you can look at the
-library `data-fix`. Herre is a quick example of list data-type defined in this style:
+library `data-fix`. Here is a quick example of list data-type defined in this style:
 
 ```haskell
 data ListF a rec = Nil | Cons a rec
@@ -155,13 +155,13 @@ newtype Expr = Expr { unExpr :: T.Term Prim CodeLoc Var }
 ```
 
 To use type checker we need to specify which types are used for primitives, variables and source code locations.
-Ro do it we need to provide instance of the class `Type.Check.HMLang`:
+To do it we need to provide an instance of the class `Type.Check.HMLang`:
 
 ```haskell
 -- | Language tag (we need it for Lang instance)
 data NumLang
 
--- | Instanciate to provide the right components of the language
+-- | Instantiate to provide the right components of the language
 instance T.Lang NumLang where
   type Src  NumLang = CodeLoc   -- ^ source code locations
   type Var  NumLang = Var       -- ^ variables
@@ -176,7 +176,7 @@ instance T.Lang NumLang where
 
 Why do we need that instance? Actually this is a tiny trick to make type-signatures 
 of the library more readable. You can see that the library is generic with many parameters.
-with that some types can type 3 to 5 parameters each and it can add up. But this class let's us define
+with that some types can type 3 to 5 parameters each and it can add up. But this class lets us define
 short synonyms for many type-names. And instead of 
 
 ```haskell
@@ -192,7 +192,7 @@ Lang q => TermOf q -> Either [ErrorOf q] TyTermOf q
 You can see the full list of type synonyms in the module `Type.Check.HM.Lang`.
 
 We use language tag `NumLang` to define the instance. 
-Also note the function `getPrimType` it provides types for our literals.
+Also note the function `getPrimType` provides types for our literals.
 It's assumed that literals have definite type. 
 
 In normal scenario users write the code in our language and we can parse it and type-check prior to execution.
@@ -222,7 +222,7 @@ bool = Expr . T.primE defLoc . PBool defLoc
 ```
 
 We can construct constant integers and booleans. 
-Let's define couple of helper functions for application of the expressions.
+Let's define a couple of helper functions for application of the expressions.
 With the functions we can apply function with one, two or three arguments:
 
 ```haskell
@@ -254,7 +254,7 @@ instance IsString Expr where
   fromString = Expr . T.varE defLoc
 ```
 
-This instance with usage of extension `OverloadedStrings` let's us write
+This instance with usage of extension `OverloadedStrings` lets us write
 variables for our language as ordinary Haskell strings.
 
 Let's define numeric expressions:
@@ -370,7 +370,7 @@ newtype Context = Context (Map v (Signature loc v))
 #### Types and signatures
 
 The context contains all signatures for known functions. Known functions can 
-be primitive operators or functions which are already were type-cheked and loaded from
+be primitive operators or functions which were already type-checked and loaded from
 other library modules.
 
 Note the difference between `Type` and `Signature`. The type can be:
@@ -395,7 +395,7 @@ The special cases for tuple and list can be expressed with `ConT` with arguments
 but they are provided here for pretty-printer. The pretty-printer is going to render them
 like Haskell does with parens and brackets.
 
-Type signatures contain information on weather type is polymorphic or monomorphic:
+Type signatures contain information on whether type is polymorphic or monomorphic:
 
 ```haskell
 -- | Functor for signature is a special type that we need for type inference algorithm.
@@ -512,7 +512,7 @@ Let's define simple expressions for our language and type-check them:
 intExpr1 = negate $ ((20::Expr) + 30) * 100
 ```
 
-Let's define couple of helpers to check that type is correct:
+Let's define a couple of helpers to check that type is correct:
 
 ```haskell
 infer = T.inferType defContext . unExpr
@@ -643,7 +643,7 @@ In the `CaseAlt` we provide additional information on:
 
 * `caseAlt'rhs` is right hand side of the case-expression (`f a`).
 
-With this in mind let's define  ahelper for `case`-expressions over points:
+With this in mind let's define a helper for `case`-expressions over points:
 
 ```haskell
 casePoint :: Expr -> (Var, Var) -> Expr -> Expr
@@ -774,7 +774,7 @@ There are many pretty-printers available. The type-checker library relies on [pr
 We have instances of the class `Pretty` for `Type`s, `Term`s, `TypeError`s and `Signatures`s.
 Let's use them to look at the result of inference for our language.
 
-But for that we need to define couple of instances for parts of our language.
+But for that we need to define a couple of instances for parts of our language.
 Library is generic with respect to literals, code locations and variables. 
 So we need to provide instances to pretty print them.
 Let's define how to pretty printer the literals:
@@ -788,7 +788,7 @@ instance Pretty Prim where
     PBool _ b -> pretty b
 ```
 
-Also we need pretty printer for source code locations:
+Also we need a pretty printer for source code locations:
 
 ```haskell
 instance Pretty CodeLoc where
@@ -803,7 +803,7 @@ Also for custom variables we need to render custom type-constructors.
 For Strings it follows the Haskell customs of separating arguments with spaces and enclosing
 the value in parens. but this can be overrided with class `PrintCons`.
 
-With those instnaces in hand we can pretty print the results of inference algorithm.
+With those instances in hand we can pretty print the results of inference algorithm.
 Let's define a helper function for that:
 
 ```haskell
@@ -812,8 +812,8 @@ printInfer :: Expr -> IO ()
 printInfer (Expr e) = T.printInfer $ T.inferType defContext e
 ```
 
-We just reuse the utility function `printInfer`, but it's good to look at it's definition.
-It's very strightforward:
+We just reuse the utility function `printInfer`, but it's good to look at its definition.
+It's very straightforward:
 
 ```haskell
 -- | Pretty printer for result of type-inference
