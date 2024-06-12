@@ -72,15 +72,18 @@ data Bind loc var a = Bind
   , bind'rhs :: a               -- ^ Definition (right-hand side)
   } deriving (Show, Eq, Functor, Foldable, Traversable, Data)
 
-$(deriveShow1 ''TermF)
-$(deriveEq1   ''TermF)
-$(deriveOrd1  ''TermF)
+-- the order is important above ghc-8.10.7, so we move Bind and CaseAlt above TermF 
 $(deriveShow1 ''Bind)
-$(deriveEq1   ''Bind)
-$(deriveOrd1  ''Bind)
 $(deriveShow1 ''CaseAlt)
+$(deriveShow1 ''TermF)
+
+$(deriveEq1   ''Bind)
 $(deriveEq1   ''CaseAlt)
+$(deriveEq1   ''TermF)
+
+$(deriveOrd1  ''Bind)
 $(deriveOrd1  ''CaseAlt)
+$(deriveOrd1  ''TermF)
 
 -- | The type of terms.
 newtype Term prim loc v = Term { unTerm :: Fix (TermF prim loc v) }
